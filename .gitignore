@@ -1,0 +1,43 @@
+# Global .gitignore for Newspaper project
+# Node.js dependencies
+node_modules/
+
+# Build output
+/dist/
+/build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE and editor folders
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Environment files
+backend/.env
+frontend/.env
+
+
+# Frontend specific
+frontend/public/pdfjs-express/core/assets/
+frontend/public/pdfjs-express/core/external/
+frontend/public/pdfjs-express/core/legacyOffice/
+frontend/public/pdfjs-express/core/pdfjs/
+frontend/public/pdfjs-express/ui/assets/
+frontend/public/pdfjs-express/ui/chunks/
+frontend/public/pdfjs-express/ui/i18n/
+frontend/node_modules
+
+# Backend specific
+backend/config/google.js
+backend/node_modules/
+
