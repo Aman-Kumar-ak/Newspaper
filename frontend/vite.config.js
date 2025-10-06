@@ -21,14 +21,15 @@ export default defineConfig({
     headers: {
       // Add CSP headers to allow Adobe services
       'Content-Security-Policy': [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://documentservices.adobe.com https://dc-api.adobe.io https://unpkg.com",
-        "connect-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://localhost:8080 http://localhost:8080",
-        "img-src 'self' data: https://documentservices.adobe.com https://dc-api.adobe.io",
-        "style-src 'self' 'unsafe-inline' https://documentservices.adobe.com",
-        "font-src 'self' https://documentservices.adobe.com",
-        "frame-src 'self' https://documentservices.adobe.com",
-        "worker-src 'self' blob: https://documentservices.adobe.com"
+        "default-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://documentservices.adobe.com https://dc-api.adobe.io https://unpkg.com;",
+            // Allow Adobe services, local dev, backend, and Google OAuth/userinfo/revoke endpoints
+            "connect-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://localhost:8080 http://localhost:8080 https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com;",
+        "img-src 'self' data: https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;",
+        "style-src 'self' 'unsafe-inline' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
+        "font-src 'self' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
+        "frame-src 'self' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
+        "worker-src 'self' blob: https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;"
       ].join('; ')
     }
   }

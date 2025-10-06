@@ -14,6 +14,7 @@ export default function PdfViewer() {
   const [fileBytes, setFileBytes] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('idle'); // idle | saving | saved | error
   
   useEffect(() => {
     const h = () => setHash(window.location.hash || '#/');
@@ -265,7 +266,31 @@ export default function PdfViewer() {
         window.AdobeDC.View.Enum.CallbackType.SAVE_API,
         function(metaData, content, options) {
           console.log('Save callback triggered');
-          saveToGoogleDrive(content);
+          setSaveStatus('saving');
+          // Return a promise so Adobe viewer knows when saving completes
+          return new Promise((resolve, reject) => {
+            saveToGoogleDrive(content)
+              .then(() => {
+                try {
+                  resolve({
+                    code: window.AdobeDC.View.Enum.ApiResponseCode.SUCCESS,
+                    data: { fileName }
+                  });
+                } catch {
+                  resolve({ code: window.AdobeDC.View.Enum.ApiResponseCode.SUCCESS });
+                }
+              })
+              .catch((err) => {
+                try {
+                  reject({
+                    code: window.AdobeDC.View.Enum.ApiResponseCode.FAIL,
+                    data: { error: { message: err?.message || 'Save failed' } }
+                  });
+                } catch {
+                  reject({ code: window.AdobeDC.View.Enum.ApiResponseCode.FAIL });
+                }
+              });
+          });
         },
         {}
       );
@@ -300,6 +325,7 @@ export default function PdfViewer() {
               event.type === 'ANNOTATION_UPDATED' || 
               event.type === 'ANNOTATION_DELETED') {
             console.log('Annotation changed, auto-saving...');
+            setSaveStatus('saving');
             
             // Get PDF with annotations and save
             adobeDCView.getAPIs().then(function(apis) {
@@ -308,9 +334,13 @@ export default function PdfViewer() {
                 saveToGoogleDrive(new Uint8Array(buffer), true); // true for auto-save
               }).catch(function(error) {
                 console.error('Error getting PDF buffer for auto-save:', error);
+                setSaveStatus('error');
+                setTimeout(() => setSaveStatus('idle'), 2000);
               });
             }).catch(function(error) {
               console.error('Error getting APIs for auto-save:', error);
+              setSaveStatus('error');
+              setTimeout(() => setSaveStatus('idle'), 2000);
             });
           }
         },
@@ -332,6 +362,7 @@ export default function PdfViewer() {
     const saveToGoogleDrive = async (savedPdf, isAutoSave = false) => {
       try {
         setIsSaving(true);
+        setSaveStatus('saving');
         
         // Get the PDF bytes
         const uint8Array = new Uint8Array(savedPdf);
@@ -348,6 +379,8 @@ export default function PdfViewer() {
           message: message,
           type: 'success',
         });
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 1500);
         
         console.log(`Successfully ${isAutoSave ? 'auto-' : ''}saved PDF to Google Drive`);
       } catch (error) {
@@ -356,6 +389,10 @@ export default function PdfViewer() {
           message: `Failed to ${isAutoSave ? 'auto-' : ''}save changes to Google Drive`,
           type: 'error',
         });
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        // Re-throw so SAVE_API can signal failure
+        throw error;
       } finally {
         setIsSaving(false);
       }
@@ -411,60 +448,6 @@ export default function PdfViewer() {
       left: 0,
       background: '#f8f9fa'
     }}>
-      {/* Minimal Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '4px 8px',
-        background: 'rgba(249, 250, 251, 0.98)',
-        borderBottom: '1px solid rgba(229, 231, 235, 0.5)',
-        position: 'relative',
-        zIndex: 1000,
-        height: '40px',
-        flexShrink: 0,
-        width: '100%',
-        boxSizing: 'border-box'
-      }}>
-        <button
-          onClick={() => window.location.hash = '#/'}
-          style={{
-            padding: '4px 8px',
-            background: '#374151',
-            color: 'white',
-            border: 'none',
-            borderRadius: 4,
-            cursor: 'pointer',
-            fontSize: '12px'
-          }}
-        >
-          ← Back
-        </button>
-        <div style={{ 
-          margin: '0 8px', 
-          flex: 1, 
-          fontSize: '14px',
-          fontWeight: '500',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          textAlign: 'center'
-        }}>
-          {fileName} {loading && '(Loading...)'}
-        </div>
-        {isSaving && (
-          <div style={{ 
-            fontSize: '12px', 
-            color: '#059669',
-            marginRight: '8px'
-          }}>
-            Saving...
-          </div>
-        )}
-        <div style={{ fontSize: '10px', color: '#6b7280' }}>
-          Adobe PDF Viewer
-        </div>
-      </div>
-
       {/* Adobe PDF Viewer Container */}
       <div 
         id="adobe-pdf-viewer"
@@ -481,6 +464,8 @@ export default function PdfViewer() {
           boxSizing: 'border-box'
         }}
       />
+
+      {/* Save status pill removed per request */}
       
       {loading && (
         <div style={{

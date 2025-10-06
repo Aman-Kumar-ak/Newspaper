@@ -24,13 +24,29 @@ export default function Dashboard() {
   const [uploadPct, setUploadPct] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('Uploading');
-  const tokens = getTokens();
   const profileMenuRef = useRef(null);
 
   useEffect(() => {
     // On mount, capture tokens from URL hash (after OAuth) and load data
     const t = tryReadTokensFromCallbackPayload();
-    if (t) setTokens(t);
+    if (t && t.accessToken) {
+      (async () => {
+        const { fetchGoogleProfile } = await import('../../lib/auth');
+        const profile = await fetchGoogleProfile(t.accessToken);
+        setTokens({ ...t, ...profile });
+      })();
+    }
+    // If already signed in but profile fields are missing, fetch them
+    (async () => {
+      const existing = getTokens();
+      if (existing.accessToken && (!existing.username || !existing.email)) {
+        try {
+          const { fetchGoogleProfile } = await import('../../lib/auth');
+          const profile = await fetchGoogleProfile(existing.accessToken);
+          if (profile) setTokens({ ...existing, ...profile });
+        } catch {}
+      }
+    })();
     (async () => {
       if (getTokens().accessToken) {
         setLoadingLabel('Fetching latest files...');
@@ -43,6 +59,9 @@ export default function Dashboard() {
       }
     })();
   }, []);
+
+  // Always get latest tokens for profile info
+  const tokens = getTokens();
 
   // Handle click outside profile menu to close it
   useEffect(() => {
@@ -89,68 +108,177 @@ export default function Dashboard() {
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+      fontFamily: 'Georgia, Times New Roman, Times, serif',
+      color: '#222',
+      overflow: 'hidden',
     }}>
-      {/* Fixed Header */}
+      {/* News-style Header */}
       <div style={{ 
-        padding: '16px',
-        borderBottom: '1px solid #e5e7eb',
-        background: '#fff',
-        flexShrink: 0,
-        zIndex: 10
+        padding: '24px 0 12px 0',
+        borderBottom: '3px solid #d90429',
+        background: 'white',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        textAlign: 'center',
+        letterSpacing: '1px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ position: 'relative' }} ref={profileMenuRef}>
-            <button title="Profile" onClick={() => setOpenProfile(v => !v)}>A</button>
-            {openProfile && (
-              <div style={{ position: 'absolute', top: 36, left: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, width: 240, zIndex: 20 }}>
-                <div style={{ fontWeight: 700 }}>Aman kumar</div>
-                <div style={{ color: '#6b7280', fontSize: 12 }}>lifepointsaman@gmail.com</div>
-                <div style={{ marginTop: 8 }}>
-                  <button style={{ color: '#ef4444' }} onClick={() => { setLoadingLabel('Signing out...'); setLoading(true); logoutGoogle(); }}>Log out</button>
-                </div>
-              </div>
-            )}
-          </div>
-          <h2 style={{ margin: 0 }}>Dashboard</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input placeholder="Search" value={search} onChange={e => setSearch(e.target.value)} />
-            <select value={filter} onChange={async (e) => {
-              const v = e.target.value;
-              setFilter(v);
-              const all = await listAllGrouped();
-              setGroups(applyFilter(all, v));
-            }}>
-              <option value="All">All</option>
-              <option value="Today">Today</option>
-              <option value="Last7">Last 7 days</option>
-              <option value="ThisMonth">This month</option>
-            </select>
-          </div>
+        <span style={{
+          fontSize: '2.6rem',
+          fontWeight: 900,
+          color: '#d90429',
+          fontFamily: 'Merriweather, Georgia, serif',
+          textTransform: 'uppercase',
+          marginRight: 8,
+        }}>Newspaper PDF Viewer</span>
+        <span style={{
+          fontSize: '1.1rem',
+          color: '#374151',
+          fontWeight: 500,
+          fontFamily: 'system-ui, sans-serif',
+        }}>
+          | Your Digital News Library
+        </span>
+      </div>
+      {/* Topbar for actions */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        maxWidth: '90vw',
+        margin: '0 auto',
+        padding: '18px 0 0 0',
+        gap: 24,
+        position: 'relative',
+      }}>
+        {/* Upload and Search/Filter Controls */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button style={{
+            background: '#d90429',
+            color: 'white',
+            border: 'none',
+            borderRadius: 6,
+            fontWeight: 700,
+            fontSize: '1rem',
+            padding: '8px 18px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            cursor: 'pointer',
+          }} onClick={() => setOpenUpload(true)}>
+            Upload PDF
+          </button>
+          <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{
+            padding: '6px 12px',
+            borderRadius: 6,
+            border: '1px solid #d1d5db',
+            fontSize: '1rem',
+          }} />
+          <select value={filter} onChange={async (e) => {
+            const v = e.target.value;
+            setFilter(v);
+            const all = await listAllGrouped();
+            setGroups(applyFilter(all, v));
+          }} style={{
+            padding: '6px 12px',
+            borderRadius: 6,
+            border: '1px solid #d1d5db',
+            fontSize: '1rem',
+          }}>
+            <option value="All">All</option>
+            <option value="Today">Today</option>
+            <option value="Last7">Last 7 days</option>
+            <option value="ThisMonth">This month</option>
+          </select>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '12px auto 0', maxWidth: 1100 }}>
-          <button onClick={() => setOpenUpload(true)}>Upload PDF</button>
+        <div style={{ flex: 1 }} />
+        {/* Profile Icon aligned to the right */}
+        <div style={{ position: 'relative', marginLeft: 'auto' }}>
+          <button
+            style={{
+              background: 'linear-gradient(135deg, #ECF8F8 60%, #5DB7DE 100%)',
+              color: '#0D21A1',
+              border: 'none',
+              borderRadius: '50%',
+              width: 44,
+              height: 44,
+              fontWeight: 700,
+              fontSize: '1.2rem',
+              boxShadow: '0 2px 8px rgba(13,33,161,0.08)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'box-shadow 0.2s',
+            }}
+            onClick={() => setOpenProfile(v => !v)}
+            title="Profile"
+          >
+            {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
+          </button>
+          {openProfile && (
+            <div style={{
+              position: 'absolute',
+              top: 54,
+              right: 0,
+              background: '#fff',
+              border: '1px solid #E7D8C9',
+              borderRadius: 16,
+              padding: 18,
+              minWidth: 220,
+              zIndex: 20,
+              boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+              fontFamily: 'system-ui, sans-serif',
+            }}>
+              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0D21A1', marginBottom: 4 }}>{tokens?.username || 'User Name'}</div>
+              <div style={{ color: '#374151', fontSize: 13, marginBottom: 12 }}>{tokens?.email || 'user@email.com'}</div>
+              <button style={{
+                background: '#d90429',
+                color: '#fff',
+                border: '1px solid #b10320',
+                borderRadius: 10,
+                fontWeight: 800,
+                letterSpacing: 0.3,
+                fontSize: '1rem',
+                padding: '10px 20px',
+                boxShadow: '0 4px 14px rgba(217,4,41,0.18)',
+                cursor: 'pointer',
+                width: '100%',
+                marginTop: 10,
+                transition: 'transform 0.06s ease, box-shadow 0.2s ease, background 0.2s ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 6px 18px rgba(217,4,41,0.28)'; e.currentTarget.style.background = '#c10324'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(217,4,41,0.18)'; e.currentTarget.style.background = '#d90429'; }}
+              onMouseDown={(e) => { e.currentTarget.style.transform = 'translateY(1px)'; }}
+              onMouseUp={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+              aria-label="Log out"
+              onClick={async () => {
+                setLoadingLabel('Signing out...');
+                setLoading(true);
+                await logoutGoogle();
+                localStorage.removeItem('googleTokens');
+                window.location.reload();
+              }}>Log out</button>
+            </div>
+          )}
         </div>
       </div>
-
       {/* Scrollable Content Area */}
       <div style={{ 
         flex: 1,
         overflow: 'auto',
-        padding: '16px',
-        minHeight: 0, // Important for flex child to allow scrolling
-        WebkitOverflowScrolling: 'touch' // Smooth scrolling on mobile
+        minHeight: 0,
+        width: '75vw',
+        maxWidth: '80vw',
+        margin: '0 auto',
+        padding: '32px 0',
       }}>
         {groups.length === 0 ? (
-          <div style={{ textAlign: 'center', marginTop: '40px' }}>No files yet. Upload your first PDF.</div>
+          <div style={{ textAlign: 'center', marginTop: '40px', fontSize: '1.2rem', color: '#d90429' }}>No files yet. Upload your first PDF.</div>
         ) : (
-          <div style={{ maxWidth: 1100, margin: '0 auto', paddingBottom: '20px' }}>
+          <div style={{ paddingBottom: '20px' }}>
             <FolderList
               groups={groups}
               search={search}
               onOpen={(file) => {
-                // Navigate to PDF viewer with file ID
-                window.location.hash = `#/viewer/${file.fileId}`;
+                window.open(`${window.location.origin}/#/viewer/${file.fileId}`, '_blank');
               }}
               onDelete={async (file) => {
                 const ok = confirm('Delete this file?');
