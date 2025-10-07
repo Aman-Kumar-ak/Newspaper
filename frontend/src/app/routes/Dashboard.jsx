@@ -2,11 +2,12 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { startGoogleLogin, tryReadTokensFromCallbackPayload, logoutGoogle } from '../../lib/auth';
 import { setTokens, getTokens } from '../../state/authStore';
-import { listAllGrouped, uploadWithProgress, deleteFile, getGroupForDate } from '../../lib/drive';
+import { listAllGrouped, uploadWithProgress, deleteFile, getGroupForDate, checkFolderExists } from '../../lib/drive';
 import Modal from '../../components/ui/Modal.jsx';
 import UploadTray from '../../components/ui/UploadTray.jsx';
 import Toast from '../../components/ui/Toast.jsx';
 import LoadingOverlay from '../../components/ui/LoadingOverlay.jsx';
+import PdfThumbnail from '../../components/pdf/PdfThumbnail.jsx';
 
 export default function Dashboard() {
   const [date, setDate] = useState(''); // DD-MM-YYYY for backend
@@ -18,6 +19,19 @@ export default function Dashboard() {
   const [openProfile, setOpenProfile] = useState(false);
   const [openUpload, setOpenUpload] = useState(false);
   const [trayItems, setTrayItems] = useState([]);
+  
+  // Set current date when upload modal opens
+  useEffect(() => {
+    if (openUpload && !dateISO) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const isoDate = `${yyyy}-${mm}-${dd}`;
+      setDateISO(isoDate);
+      setDate(`${dd}-${mm}-${yyyy}`);
+    }
+  }, [openUpload]);
   const [toast, setToast] = useState({ visible: false, message: '' });
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Fetching latest files...');
@@ -26,10 +40,13 @@ export default function Dashboard() {
   const [uploadStatus, setUploadStatus] = useState('Uploading');
   const [expandedDates, setExpandedDates] = useState(new Set());
   const [showDateFilter, setShowDateFilter] = useState(false);
+  const [openMenuFileId, setOpenMenuFileId] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { fileId, fileName }
   const profileMenuRef = useRef(null);
   const profileBtnRef = useRef(null);
   const [profileMenuPos, setProfileMenuPos] = useState({ top: 0, left: 0 });
   const dateFilterRef = useRef(null);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     // On mount, capture tokens from URL hash (after OAuth) and load data
@@ -80,16 +97,19 @@ export default function Dashboard() {
       if (dateFilterRef.current && !dateFilterRef.current.contains(event.target)) {
         setShowDateFilter(false);
       }
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpenMenuFileId(null);
+      }
     };
 
-    if (openProfile || showDateFilter) {
+    if (openProfile || showDateFilter || openMenuFileId) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [openProfile, showDateFilter]);
+  }, [openProfile, showDateFilter, openMenuFileId]);
 
   // When opening profile menu, calculate its position
   useEffect(() => {
@@ -116,14 +136,25 @@ export default function Dashboard() {
     return groupsIn.filter(g => isInRange(g.date));
   }
 
+  function sortByDate(groupsIn) {
+    return [...groupsIn].sort((a, b) => {
+      const [dA, mA, yA] = a.date.split('-').map(Number);
+      const [dB, mB, yB] = b.date.split('-').map(Number);
+      const dateA = new Date(yA, mA - 1, dA);
+      const dateB = new Date(yB, mB - 1, dB);
+      return dateB - dateA; // Newest first
+    });
+  }
+
   function applySearch(groupsIn, searchTerm) {
     if (!searchTerm.trim()) return groupsIn;
     return groupsIn.map(group => ({
       ...group,
-      files: group.files.filter(file => 
-        file.name.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    })).filter(group => group.files.length > 0);
+      files: (group.files || []).filter(file => {
+        const fileName = file.fileName || file.name || '';
+        return fileName.toLowerCase().includes(searchTerm.toLowerCase());
+      })
+    })).filter(group => group.files && group.files.length > 0);
   }
 
   function toggleDateExpansion(date) {
@@ -157,7 +188,7 @@ export default function Dashboard() {
     );
   }
 
-  const filteredGroups = applySearch(applyFilter(groups, filter), search);
+  const filteredGroups = sortByDate(applySearch(applyFilter(groups, filter), search));
 
   return (
     <div style={{ 
@@ -413,13 +444,15 @@ export default function Dashboard() {
         borderRadius: '0 16px 0 0',
         border: '1px solid #E5E7EB',
         position: 'relative',
-        overflow: 'visible',
+        overflow: 'hidden',
+        minHeight: 0,
       }}>
 
         {/* Scrollable Content */}
         <div className="main-scroll" style={{
           height: '100%',
-          overflow: 'auto',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           padding: '24px',
           paddingTop: '80px',
         }}>
@@ -434,7 +467,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {filteredGroups.map((group) => (
+              {filteredGroups.filter(group => group.files && group.files.length > 0).map((group) => (
                 <div key={group.date} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {/* Date Header */}
                   <button
@@ -445,6 +478,7 @@ export default function Dashboard() {
                       gap: '8px',
                       background: 'transparent',
                       border: 'none',
+                      outline: 'none',
                       cursor: 'pointer',
                       padding: '8px 0',
                       fontSize: '16px',
@@ -471,151 +505,114 @@ export default function Dashboard() {
                   {expandedDates.has(group.date) && (
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                      gap: '20px',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                      gap: '16px',
                       marginLeft: '24px',
                     }}>
                       {group.files.map((file) => (
                         <div
                           key={file.fileId}
+                          onClick={() => window.open(`${window.location.origin}/#/viewer/${file.fileId}`, '_blank')}
                           style={{
                             background: '#F9FAFB',
-                            borderRadius: '12px',
-                            padding: '16px',
+                            borderRadius: '10px',
+                            padding: '12px',
                             boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                             border: '1px solid #E5E7EB',
                             position: 'relative',
+                            cursor: 'pointer',
+                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
                           }}
                         >
                           {/* Three-dot menu */}
-                          <button
-                            style={{
-                              position: 'absolute',
-                              top: '12px',
-                              right: '12px',
-                              background: 'transparent',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '4px',
-                              color: '#6B7280',
-                            }}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                              <circle cx="12" cy="5" r="2" fill="currentColor"/>
-                              <circle cx="12" cy="12" r="2" fill="currentColor"/>
-                              <circle cx="12" cy="19" r="2" fill="currentColor"/>
-                            </svg>
-                          </button>
-
-                          {/* Times of India label */}
-                          <div style={{
-                            fontSize: '12px',
-                            color: '#6B7280',
-                            marginBottom: '8px',
-                            fontWeight: 500,
-                          }}>
-                            Times of India
-                          </div>
-
-                          {/* Newspaper Preview */}
-                          <div style={{
-                            background: 'white',
-                            borderRadius: '8px',
-                            padding: '16px',
-                            marginBottom: '12px',
-                            border: '1px solid #E5E7EB',
-                            minHeight: '200px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            textAlign: 'center',
-                          }}>
-                            <div style={{
-                              fontSize: '18px',
-                              fontWeight: 700,
-                              color: '#111827',
-                              marginBottom: '8px',
-                              fontFamily: 'serif',
-                            }}>
-                              DAILY NEWS
-                            </div>
-                            <div style={{
-                              fontSize: '14px',
-                              color: '#6B7280',
-                              marginBottom: '16px',
-                            }}>
-                              Your headline
-                            </div>
-                            <div style={{
-                              fontSize: '10px',
-                              color: '#9CA3AF',
-                              lineHeight: '1.4',
-                              textAlign: 'left',
-                              width: '100%',
-                            }}>
-                              <div style={{ marginBottom: '4px' }}>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</div>
-                              <div style={{ marginBottom: '4px' }}>Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</div>
-                              <div style={{ marginBottom: '4px' }}>Ut enim ad minim veniam, quis nostrud exercitation.</div>
-                              <div>Duis aute irure dolor in reprehenderit in voluptate velit esse.</div>
-                            </div>
-                          </div>
-
-                          {/* File name */}
-                          <div style={{
-                            fontSize: '14px',
-                            fontWeight: 500,
-                            color: '#111827',
-                            marginBottom: '12px',
-                            wordBreak: 'break-word',
-                          }}>
-                            {file.name}
-                          </div>
-
-                          {/* Action buttons */}
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ position: 'relative' }} ref={openMenuFileId === file.fileId ? menuRef : null}>
                             <button
-                              onClick={() => window.open(`${window.location.origin}/#/viewer/${file.fileId}`, '_blank')}
-                              style={{
-                                flex: 1,
-                                background: '#3B82F6',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '8px',
-                                padding: '8px 12px',
-                                fontSize: '12px',
-                                fontWeight: 500,
-                                cursor: 'pointer',
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuFileId(openMenuFileId === file.fileId ? null : file.fileId);
                               }}
-                            >
-                              Open
-                            </button>
-                            <button
-                              onClick={async () => {
-                const ok = confirm('Delete this file?');
-                if (!ok) return;
-                await deleteFile(file.fileId);
-                                const updated = await getGroupForDate(file.folderDate || group.date);
-                setGroups(prev => {
-                  const others = prev.filter(g => g.date !== updated.date);
-                  return applyFilter([updated, ...others], filter);
-                });
-              }}
                               style={{
-                                flex: 1,
+                                position: 'absolute',
+                                top: '-2px',
+                                right: '-2px',
                                 background: 'transparent',
-                                color: '#DC2626',
-                                border: '1px solid #DC2626',
-                                borderRadius: '8px',
-                                padding: '8px 12px',
-                                fontSize: '12px',
-                                fontWeight: 500,
+                                border: 'none',
                                 cursor: 'pointer',
+                                padding: '4px',
+                                color: '#6B7280',
+                                zIndex: 10,
                               }}
                             >
-                              Delete
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="5" r="2" fill="currentColor"/>
+                                <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                                <circle cx="12" cy="19" r="2" fill="currentColor"/>
+                              </svg>
                             </button>
+                            
+                            {openMenuFileId === file.fileId && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '20px',
+                                right: '0',
+                                background: 'white',
+                                border: '1px solid #E5E7EB',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                minWidth: '120px',
+                                zIndex: 100,
+                              }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenuFileId(null);
+                                    setDeleteConfirm({ fileId: file.fileId, fileName: file.fileName || file.name || 'Untitled', date: group.date });
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    color: '#DC2626',
+                                    fontWeight: 500,
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
+                                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
                           </div>
+
+                          {/* File name label */}
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#6B7280',
+                            marginBottom: '6px',
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            paddingRight: '28px',
+                            maxWidth: '100%',
+                          }}>
+                            {file.fileName || file.name || 'Untitled'}
+                          </div>
+
+                          {/* PDF Thumbnail Preview */}
+                          <PdfThumbnail fileId={file.fileId} fileName={file.fileName || file.name} />
                         </div>
                       ))}
                     </div>
@@ -627,70 +624,336 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <Modal open={openUpload} title="Upload PDF" onClose={() => setOpenUpload(false)}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label>
-            Date
-            <input type="date" value={dateISO} onChange={e => {
-              const raw = e.target.value; // YYYY-MM-DD
-              setDateISO(raw);
-              const m = String(raw || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-              const ddmmyyyy = m ? `${m[3]}-${m[2]}-${m[1]}` : '';
-              setDate(ddmmyyyy);
-            }} />
-          </label>
-          <label>
-            File
-            <input type="file" accept="application/pdf" onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setOpenUpload(false);
-              // View-only tray items: we feed a single item with external progress updates
-              const item = { id: `${Date.now()}`, name: file.name, pct: 0, status: 'queued' };
-              setTrayItems([item]);
-              try {
-                const { promise } = uploadWithProgress(date, file, (pct) => setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, pct, status: pct >= 100 ? 'processing' : 'uploading' } : x)));
-                await promise;
-                setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, pct: 100, status: 'done' } : x));
-                const updated = await getGroupForDate(date);
-                setGroups(prev => {
-                  const others = prev.filter(g => g.date !== updated.date);
-                  return applyFilter([updated, ...others], filter);
-                });
-              } catch (e) {
-                setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, status: 'error' } : x));
-              } finally {
-                // keep tray visible; user can close when done
-              }
-            }} />
-          </label>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={() => setOpenUpload(false)}>Close</button>
+      {openUpload && (
+        <div 
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(0,0,0,0.5)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            zIndex: 50 
+          }}
+          onClick={() => {
+            setOpenUpload(false);
+            setFile(null);
+            setDate('');
+            setDateISO('');
+          }}
+        >
+          <div 
+            style={{ 
+              width: 480, 
+              maxWidth: '90%', 
+              background: '#FFFFFF', 
+              borderRadius: '16px', 
+              padding: '32px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+            }} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              margin: '0 0 24px 0', 
+              fontSize: '20px', 
+              fontWeight: 600, 
+              color: '#111827' 
+            }}>Upload PDF</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: 500, 
+                  color: '#374151', 
+                  marginBottom: '8px' 
+                }}>Date</label>
+                <input 
+                  type="date" 
+                  value={dateISO} 
+                  onChange={e => {
+                    const raw = e.target.value;
+                    setDateISO(raw);
+                    const m = String(raw || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    const ddmmyyyy = m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+                    setDate(ddmmyyyy);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: '#374151',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+              
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: 500, 
+                  color: '#374151', 
+                  marginBottom: '8px' 
+                }}>File</label>
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    id="file-upload"
+                    type="file" 
+                    accept="application/pdf" 
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    style={{
+                      position: 'absolute',
+                      opacity: 0,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <div style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: file ? '#374151' : '#9CA3AF',
+                    background: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                  }}>
+                    <span style={{ 
+                      overflow: 'hidden', 
+                      textOverflow: 'ellipsis', 
+                      whiteSpace: 'nowrap',
+                      flex: 1,
+                    }}>
+                      {file ? file.name : 'No file chosen'}
+                    </span>
+                    <button
+                      type="button"
+                      style={{
+                        background: '#3B82F6',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 16px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        marginLeft: '12px',
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        document.getElementById('file-upload').click();
+                      }}
+                    >
+                      Choose File
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                <button
+                  onClick={() => {
+                    setOpenUpload(false);
+                    setFile(null);
+                    setDate('');
+                    setDateISO('');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: '#FFFFFF',
+                    color: '#374151',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={!date || !file}
+                  onClick={async () => {
+                    if (!date || !file) return;
+                    setOpenUpload(false);
+                    const item = { id: `${Date.now()}-${Math.random()}`, name: file.name, pct: 0, status: 'checking' };
+                    setTrayItems(prev => [...prev, item]);
+                    
+                    try {
+                      // Check if folder exists
+                      const folderExists = await checkFolderExists(date);
+                      
+                      if (!folderExists) {
+                        // Show folder creation status
+                        setTrayItems(prev => prev.map(x => x.id === item.id ? 
+                          { ...x, pct: 0, status: 'creating-folder' } : x
+                        ));
+                        // Simulate folder creation progress (0-50%)
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        setTrayItems(prev => prev.map(x => x.id === item.id ? 
+                          { ...x, pct: 25, status: 'creating-folder' } : x
+                        ));
+                      }
+                      
+                      // Start upload
+                      const { promise } = uploadWithProgress(date, file, (pct) => {
+                        setTrayItems(prev => prev.map(x => x.id === item.id ? 
+                          { ...x, pct, status: pct >= 100 ? 'processing' : 'uploading' } : x
+                        ));
+                      }, folderExists);
+                      
+                      await promise;
+                      setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, pct: 100, status: 'done' } : x));
+                      const updated = await getGroupForDate(date);
+                      setGroups(prev => {
+                        const others = prev.filter(g => g.date !== updated.date);
+                        return sortByDate(applyFilter([updated, ...others], filter));
+                      });
+                    } catch (e) {
+                      setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, status: 'error' } : x));
+                    }
+                    setFile(null);
+                    setDate('');
+                    setDateISO('');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: (!date || !file) ? '#E5E7EB' : '#3B82F6',
+                    color: (!date || !file) ? '#9CA3AF' : '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: (!date || !file) ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Upload
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
 
       <UploadTray
-        open={openUpload || trayItems.length > 0}
-        onClose={() => setOpenUpload(false)}
-        onItemDone={async (dateStr) => {
-          const updated = await getGroupForDate(dateStr);
-          setGroups(prev => {
-            const others = prev.filter(g => g.date !== updated.date);
-            return applyFilter([updated, ...others], filter);
-          });
-        }}
         items={trayItems}
+        onClose={() => setTrayItems([])}
         onAllDone={(names) => {
           setToast({ visible: true, message: names.length === 1 ? `${names[0]} uploaded successfully` : `${names.length} files uploaded successfully` });
-          // hide tray items after success
-          setTimeout(() => setTrayItems([]), 400);
-          // auto-hide toast
+          setTimeout(() => setTrayItems([]), 1500);
           setTimeout(() => setToast({ visible: false, message: '' }), 3000);
         }}
       />
       <Toast message={toast.message} visible={toast.visible} />
       <LoadingOverlay open={loading} label={loadingLabel} />
+      
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <div 
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(0,0,0,0.5)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            zIndex: 100 
+          }}
+          onClick={() => setDeleteConfirm(null)}
+        >
+          <div 
+            style={{ 
+              width: 420, 
+              maxWidth: '90%', 
+              background: '#FFFFFF', 
+              borderRadius: '16px', 
+              padding: '32px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+            }} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              margin: '0 0 16px 0', 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              color: '#111827' 
+            }}>Delete File</h3>
+            
+            <p style={{
+              margin: '0 0 24px 0',
+              fontSize: '14px',
+              color: '#6B7280',
+              lineHeight: '1.5',
+            }}>
+              This file <strong style={{ color: '#374151' }}>"{deleteConfirm.fileName}"</strong> will be deleted. This action cannot be undone.
+            </p>
+            
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  color: '#374151',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const { fileId, date } = deleteConfirm;
+                  setDeleteConfirm(null);
+                  setLoadingLabel('Deleting file...');
+                  setLoading(true);
+                  try {
+                    await deleteFile(fileId);
+                    const updated = await getGroupForDate(date);
+                    setGroups(prev => {
+                      const others = prev.filter(g => g.date !== updated.date);
+                      return sortByDate(applyFilter([updated, ...others], filter));
+                    });
+                    setToast({ visible: true, message: 'File deleted successfully' });
+                    setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                  } catch (e) {
+                    setToast({ visible: true, message: 'Failed to delete file' });
+                    setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

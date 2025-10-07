@@ -32,6 +32,19 @@ export async function ensureFolder(date) {
   return res.json();
 }
 
+export async function checkFolderExists(date) {
+  try {
+    const url = new URL(`${API_BASE}/drive/list`);
+    url.searchParams.set('date', formatDateToDDMMYYYY(date));
+    const res = await fetch(url, { headers: authHeaders() });
+    // If we can list files, folder exists
+    await res.json();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function listByDate(date) {
   const url = new URL(`${API_BASE}/drive/list`);
   url.searchParams.set('date', formatDateToDDMMYYYY(date));
@@ -51,7 +64,7 @@ export async function upload(date, file) {
   return res.json();
 }
 
-export function uploadWithProgress(date, file, onProgress) {
+export function uploadWithProgress(date, file, onProgress, folderExists = true) {
   const fd = new FormData();
   fd.append('date', formatDateToDDMMYYYY(date));
   fd.append('file', file);
@@ -60,14 +73,19 @@ export function uploadWithProgress(date, file, onProgress) {
   xhr.open('POST', url, true);
   const headers = authHeaders();
   for (const [k, v] of headers.entries()) xhr.setRequestHeader(k, v);
+  
   if (xhr.upload && typeof onProgress === 'function') {
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        onProgress(pct);
+        // If folder doesn't exist, folder creation is 0-50%, upload is 50-100%
+        // If folder exists, upload is 0-100%
+        const uploadPct = Math.round((e.loaded / e.total) * 100);
+        const finalPct = folderExists ? uploadPct : 50 + Math.round(uploadPct / 2);
+        onProgress(finalPct);
       }
     };
   }
+  
   const promise = new Promise((resolve, reject) => {
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {

@@ -9,6 +9,13 @@ const app = express();
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
+// Add headers to allow PDF embedding
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://localhost:5173 http://localhost:*");
+  next();
+});
+
 app.get('/health', (req, res) => {
   res.json({ ok: true });
 });
