@@ -5,6 +5,33 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Set worker path
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
+// Suppress pdf.js warnings and errors in console
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+
+console.error = (...args) => {
+  const message = args[0]?.toString() || '';
+  // Filter out pdf.js related errors and warnings
+  if (message.includes('pdf.js') || 
+      message.includes('PdfThumbnail') || 
+      message.includes('Name token') ||
+      message.includes('Thumbnail generation')) {
+    return;
+  }
+  originalConsoleError.apply(console, args);
+};
+
+console.warn = (...args) => {
+  const message = args[0]?.toString() || '';
+  // Filter out pdf.js related warnings
+  if (message.includes('pdf.js') || 
+      message.includes('Name token') ||
+      message.includes('Thumbnail')) {
+    return;
+  }
+  originalConsoleWarn.apply(console, args);
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 // In-memory cache for thumbnails
@@ -99,10 +126,10 @@ export default function PdfThumbnail({ fileId, fileName }) {
         await pdf.destroy();
       } catch (err) {
         if (err.name === 'AbortError') {
-          console.log('Thumbnail generation aborted for:', fileName);
+          // Silently handle aborted thumbnail generation
           return;
         }
-        console.error('Failed to generate PDF thumbnail:', err);
+        // Silently handle errors - don't spam console
         if (mounted) {
           setError(true);
           setLoading(false);

@@ -1,33 +1,64 @@
 # Global .gitignore for Newspaper project
 # Node.js dependencies
 node_modules/
+**/node_modules/
 
 # Build output
 /dist/
 /build/
+*.tsbuildinfo
 
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+*.swp
+*.swo
+*~
 
 # IDE and editor folders
 .vscode/
 .idea/
 *.sublime-workspace
 *.sublime-project
+*.iml
+.project
+.classpath
+.settings/
 
 # Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
 backend/.env
+backend/.env.*
 frontend/.env
+frontend/.env.*
 
+# BUT keep environment templates
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 
 # Frontend specific
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/.cache/
 frontend/public/pdfjs-express/core/assets/
 frontend/public/pdfjs-express/core/external/
 frontend/public/pdfjs-express/core/legacyOffice/
@@ -35,9 +66,67 @@ frontend/public/pdfjs-express/core/pdfjs/
 frontend/public/pdfjs-express/ui/assets/
 frontend/public/pdfjs-express/ui/chunks/
 frontend/public/pdfjs-express/ui/i18n/
-frontend/node_modules
+frontend/node_modules/
 
 # Backend specific
 backend/config/google.js
 backend/node_modules/
+backend/dist/
+backend/.cache/
+
+# Testing
+coverage/
+*.coverage
+.nyc_output/
+junit.xml
+
+# Temporary files
+*.tmp
+*.temp
+.temp/
+.tmp/
+
+# Lock files (optional - uncomment if you want to ignore them)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Mac specific
+.AppleDouble
+.LSOverride
+
+# Windows specific
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux specific
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# Application cache
+.cache/
+*.cache
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+
+# Production builds (keep Docker images out)
+*.tar
+*.tar.gz
+
+# Logs directory (not individual .md files)
+logs/
+*.log.*
+
+# Keep important documentation and config files
+!README.md
+!*.md
+!Dockerfile
+!docker-compose.yml
+!nginx.conf
+!.dockerignore
 

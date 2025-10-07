@@ -1,0 +1,7 @@
+# Render build configuration
+build:
+  runtime: node
+  command: npm install
+  
+start:
+  command: npm start

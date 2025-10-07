@@ -1,0 +1,53 @@
+# Node modules (will be installed in container)
+node_modules/
+npm-debug.log
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# Environment files (use mounted volumes or secrets)
+.env
+.env.*
+!.env.example
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+coverage/
+.nyc_output/
+*.test.js
+*.spec.js
+
+# Temporary files
+*.tmp
+*.temp
+.temp/
+.tmp/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts (for frontend)
+dist/
+build/
+.cache/
+
+# Docker files (not needed in container)
+Dockerfile
+docker-compose.yml
+.dockerignore
