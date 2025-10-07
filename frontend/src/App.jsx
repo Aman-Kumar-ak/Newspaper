@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Dashboard from './app/routes/Dashboard.jsx'
 import PdfViewer from './app/routes/PdfViewer.jsx'
 import Login from './app/routes/Login.jsx'
+import Settings from './app/routes/Settings.jsx'
 import PrivacyPolicy from './app/routes/PrivacyPolicy.jsx'
 import TermsAndConditions from './app/routes/TermsAndConditions.jsx'
 import { tryReadTokensFromCallbackPayload } from './lib/auth'
@@ -23,19 +24,25 @@ export default function App() {
     if (t && t.accessToken) {
       setTokens({ accessToken: t.accessToken, refreshToken: t.refreshToken || '' });
       // Clean hash and go home
-      window.location.replace('#/');
+      window.location.replace('#/home');
     }
   }, []);
 
   const authed = !!(localStorage.getItem('googleTokens'));
   const path = hash.replace('#', '');
 
-  if (!authed && path !== '/login' && path !== '/privacy' && path !== '/terms') return <Login />
-
+  // Public routes (accessible without authentication)
   if (path === '/login') return <Login />
-  if (path === '/privacy') return <PrivacyPolicy />
-  if (path === '/terms') return <TermsAndConditions />
-  if (path.startsWith('/viewer/')) return <PdfViewer />
+  if (path === '/privacy-policy') return <PrivacyPolicy />
+  if (path === '/terms-and-conditions') return <TermsAndConditions />
   
+  // Protected routes (require authentication)
+  if (!authed) return <Login />
+  
+  if (path === '/settings') return <Settings />
+  if (path.startsWith('/viewer/')) return <PdfViewer />
+  if (path === '/home' || path === '/' || path === '') return <Dashboard />
+  
+  // Fallback to home for unknown routes
   return <Dashboard />
 }

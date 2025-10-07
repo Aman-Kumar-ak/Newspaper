@@ -285,11 +285,14 @@ export default function Dashboard() {
         marginRight: '120px',
       }}>
         {/* Left: Title */}
-        <h1 style={{
+        <h1 
+          onClick={() => window.location.hash = '#/home'}
+          style={{
           fontSize: '1.5rem',
           fontWeight: 600,
           color: '#374151',
           margin: 0,
+            cursor: 'pointer',
         }}>
           Digital News Library
         </h1>
@@ -493,7 +496,11 @@ export default function Dashboard() {
                     {tokens?.email || 'user@email.com'}
                   </div>
                 </div>
-                <button style={{
+                <button 
+                  onClick={() => {
+                    window.location.hash = '#/settings';
+                  }}
+                  style={{
                   width: '100%',
                   padding: '8px 16px',
                   border: 'none',
@@ -510,7 +517,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={() => {
-                    window.location.hash = '#/privacy';
+                    window.location.hash = '#/privacy-policy';
                   }}
                   style={{
                     width: '100%',
@@ -529,7 +536,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={() => {
-                    window.location.hash = '#/terms';
+                    window.location.hash = '#/terms-and-conditions';
                   }}
                   style={{
                     width: '100%',
@@ -552,7 +559,7 @@ export default function Dashboard() {
                     setLoading(true);
                     await logoutGoogle();
                     localStorage.removeItem('googleTokens');
-                    window.location.reload();
+                    window.location.hash = '#/login';
                   }}
                   style={{
                     width: '100%',

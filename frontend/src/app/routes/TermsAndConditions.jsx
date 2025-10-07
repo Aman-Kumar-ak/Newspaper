@@ -1,6 +1,7 @@
 export default function TermsAndConditions() {
   const handleBack = () => {
-    window.history.back();
+    const authed = !!(localStorage.getItem('googleTokens'));
+    window.location.hash = authed ? '#/home' : '#/login';
   };
 
   const ArrowLeft = () => (
