@@ -33,8 +33,26 @@ app.use(compression());
 app.use(morgan(isProduction ? 'combined' : 'dev'));
 
 // CORS Configuration
+// Allow multiple origins for development and production
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+  : ['http://localhost:5173'];
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || (isProduction ? false : '*'),
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else if (allowedOrigins.some(allowed => allowed === '*' || origin.endsWith('.vercel.app'))) {
+      // Allow all Vercel preview deployments
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -66,9 +84,7 @@ app.use(cookieParser());
 // Custom headers for PDF embedding
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  const allowedOrigins = process.env.CORS_ORIGIN 
-    ? process.env.CORS_ORIGIN.split(',')
-    : ['http://localhost:5173', 'http://localhost:*'];
+  // Use the same allowed origins as CORS
   const cspOrigins = allowedOrigins.join(' ');
   res.setHeader('Content-Security-Policy', `frame-ancestors 'self' ${cspOrigins}`);
   next();
