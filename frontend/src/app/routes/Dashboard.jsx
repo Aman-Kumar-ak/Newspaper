@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { startGoogleLogin, tryReadTokensFromCallbackPayload, logoutGoogle } from '../../lib/auth';
 import { setTokens, getTokens } from '../../state/authStore';
 import { listAllGrouped, uploadWithProgress, deleteFile, getGroupForDate } from '../../lib/drive';
@@ -26,6 +27,8 @@ export default function Dashboard() {
   const [expandedDates, setExpandedDates] = useState(new Set());
   const [showDateFilter, setShowDateFilter] = useState(false);
   const profileMenuRef = useRef(null);
+  const profileBtnRef = useRef(null);
+  const [profileMenuPos, setProfileMenuPos] = useState({ top: 0, left: 0 });
   const dateFilterRef = useRef(null);
 
   useEffect(() => {
@@ -71,7 +74,7 @@ export default function Dashboard() {
   // Handle click outside profile menu and date filter to close them
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+      if (openProfile && profileMenuRef.current && !profileMenuRef.current.contains(event.target) && profileBtnRef.current && !profileBtnRef.current.contains(event.target)) {
         setOpenProfile(false);
       }
       if (dateFilterRef.current && !dateFilterRef.current.contains(event.target)) {
@@ -87,6 +90,17 @@ export default function Dashboard() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [openProfile, showDateFilter]);
+
+  // When opening profile menu, calculate its position
+  useEffect(() => {
+    if (openProfile && profileBtnRef.current) {
+      const rect = profileBtnRef.current.getBoundingClientRect();
+      setProfileMenuPos({
+        top: rect.bottom + 8, // 8px gap
+        left: rect.right - 200, // align right edge, menu minWidth is 200px
+      });
+    }
+  }, [openProfile]);
 
   function applyFilter(groupsIn, f) {
     if (f === 'All') return groupsIn;
@@ -242,7 +256,7 @@ export default function Dashboard() {
               borderRadius: '12px',
               padding: '8px 0',
               minWidth: '160px',
-              zIndex: 20,
+              zIndex: 9998,
               boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
             }}>
               {['All', 'Today', 'Last 7 days', 'This month'].map((option) => (
@@ -275,43 +289,72 @@ export default function Dashboard() {
         {/* Close Center Group */}
         </div>
 
-        {/* Right: Profile */}
+        {/* Right: Upload + Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', justifySelf: 'end', transform: 'translateX(var(--profile-right-shift, 0px))' }}>
-          {/* Profile Icon */}
-          <div style={{ position: 'relative' }} ref={profileMenuRef}>
+          {/* Upload Button */}
           <button
-              onClick={() => setOpenProfile(!openProfile)}
+            onClick={() => setOpenUpload(true)}
             style={{
-                background: '#B8E6F0',
+              background: '#3B82F6',
+              color: '#FFFFFF',
               border: 'none',
-              borderRadius: '50%',
-                width: '40px',
-                height: '40px',
+              borderRadius: '12px',
+              padding: '10px 16px',
               cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              gap: '8px',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7,10 12,15 17,10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Upload
+          </button>
+          
+          {/* Profile Icon */}
+          <div style={{ position: 'relative' }}>
+            <button
+              ref={profileBtnRef}
+              onClick={() => setOpenProfile(!openProfile)}
+              style={{
+                background: '#B8E6F0',
+                border: 'none',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 fontSize: '16px',
                 fontWeight: 600,
                 color: '#374151',
-            }}
-          >
-            {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
-          </button>
-          {openProfile && (
-            <div style={{
-              position: 'absolute',
-                top: '100%',
-              right: 0,
-                background: 'white',
-                border: '1px solid #E5E7EB',
-                borderRadius: '12px',
-                padding: '12px 0',
-                minWidth: '200px',
-              zIndex: 20,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                marginTop: '8px',
-              }}>
+              }}
+            >
+              {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
+            </button>
+            {openProfile && createPortal(
+              <div
+                ref={profileMenuRef}
+                style={{
+                  position: 'fixed',
+                  top: profileMenuPos.top,
+                  left: profileMenuPos.left,
+                  background: 'white',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '12px',
+                  padding: '12px 0',
+                  minWidth: '200px',
+                  zIndex: 10000,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                }}
+              >
                 <div style={{ padding: '0 16px 8px', borderBottom: '1px solid #F3F4F6' }}>
                   <div style={{ fontWeight: 600, fontSize: '14px', color: '#111827' }}>
                     {tokens?.username || 'User Name'}
@@ -320,13 +363,13 @@ export default function Dashboard() {
                     {tokens?.email || 'user@email.com'}
                   </div>
                 </div>
-              <button style={{
+                <button style={{
                   width: '100%',
                   padding: '8px 16px',
-                border: 'none',
+                  border: 'none',
                   background: 'transparent',
                   textAlign: 'left',
-                cursor: 'pointer',
+                  cursor: 'pointer',
                   fontSize: '14px',
                   color: '#374151',
                 }}>
@@ -334,11 +377,11 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={async () => {
-                setLoadingLabel('Signing out...');
-                setLoading(true);
-                await logoutGoogle();
-                localStorage.removeItem('googleTokens');
-                window.location.reload();
+                    setLoadingLabel('Signing out...');
+                    setLoading(true);
+                    await logoutGoogle();
+                    localStorage.removeItem('googleTokens');
+                    window.location.reload();
                   }}
                   style={{
                     width: '100%',
@@ -353,8 +396,9 @@ export default function Dashboard() {
                 >
                   Logout
                 </button>
-            </div>
-          )}
+              </div>,
+              document.body
+            )}
           </div>
         </div>
       </div>
@@ -371,27 +415,6 @@ export default function Dashboard() {
         position: 'relative',
         overflow: 'visible',
       }}>
-        {/* Fixed Upload Button */}
-        <button
-          onClick={() => setOpenUpload(true)}
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: 'calc(120px + 24px)',
-            background: '#3B82F6',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '12px 20px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 500,
-            zIndex: 1000,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          }}
-        >
-          Upload
-        </button>
 
         {/* Scrollable Content */}
         <div className="main-scroll" style={{
