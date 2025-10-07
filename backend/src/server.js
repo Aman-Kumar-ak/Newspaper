@@ -6,7 +6,11 @@ const authRoutes = require('./routes/auth');
 const driveRoutes = require('./routes/drive');
 
 const app = express();
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true }));
+app.use(cors({ 
+  origin: process.env.CORS_ORIGIN || '*', 
+  credentials: true,
+  exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length']
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // Add headers to allow PDF embedding

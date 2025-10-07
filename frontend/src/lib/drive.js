@@ -161,20 +161,31 @@ export async function getFileBytes(fileId) {
   const contentDisposition = res.headers.get('content-disposition');
   console.log('Content-Disposition header:', contentDisposition);
   
-  let fileName = 'untitled.pdf'; // Better default than document.pdf
+  let fileName = 'document.pdf'; // Default fallback
   if (contentDisposition) {
     // Try different patterns to extract filename
     const patterns = [
-      /filename="([^"]+)"/,
-      /filename=([^;]+)/,
-      /filename\*=UTF-8''([^;]+)/
+      /filename\*=UTF-8''([^;\s]+)/,  // RFC 5987 format (try first)
+      /filename="([^"]+)"/,            // Quoted format
+      /filename=([^;\s]+)/             // Unquoted format
     ];
     
     for (const pattern of patterns) {
       const match = contentDisposition.match(pattern);
       if (match) {
-        fileName = decodeURIComponent(match[1]);
-        break;
+        let extracted = match[1].trim();
+        // Remove quotes if present
+        extracted = extracted.replace(/^"|"$/g, '');
+        // Decode if it's URL encoded
+        try {
+          fileName = decodeURIComponent(extracted);
+          console.log('Successfully extracted filename:', fileName);
+          break;
+        } catch (e) {
+          fileName = extracted;
+          console.log('Using unencoded filename:', fileName);
+          break;
+        }
       }
     }
   }

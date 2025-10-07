@@ -30,12 +30,27 @@ export default function PdfViewer() {
     }
   }, [toast]);
 
-  // Expected route: #/viewer/:fileId
-  const fileId = useMemo(() => {
+  // Expected route: #/viewer/:fileId?name=filename
+  const { fileId, fileNameFromUrl } = useMemo(() => {
     const p = (hash.replace('#', '') || '/').split('/');
-    if (p[1] === 'viewer' && p[2]) return p[2];
-    return '';
+    if (p[1] === 'viewer' && p[2]) {
+      const [id, queryString] = p[2].split('?');
+      let name = '';
+      if (queryString) {
+        const params = new URLSearchParams(queryString);
+        name = decodeURIComponent(params.get('name') || '');
+      }
+      return { fileId: id, fileNameFromUrl: name };
+    }
+    return { fileId: '', fileNameFromUrl: '' };
   }, [hash]);
+
+  // Set filename immediately if available from URL
+  useEffect(() => {
+    if (fileNameFromUrl) {
+      setFileName(fileNameFromUrl);
+    }
+  }, [fileNameFromUrl]);
 
   // Load Adobe PDF Embed API
   useEffect(() => {
@@ -214,7 +229,7 @@ export default function PdfViewer() {
       showThumbnails: true, // Show thumbnails panel
       exitPDFViewerType: "RETURN", // Return to same page when exiting
       showFullScreen: true, // Enable fullscreen option
-      showZoomControl: false, // Show zoom controls
+      showZoomControl: true, // Show zoom controls
       enableFormFillAPI: false, // Enable form filling API
       enableCommentAPI: true, // Enable comment API
       showCommentTools: true, // Show comment tools
@@ -474,52 +489,216 @@ export default function PdfViewer() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
+          background: 'rgba(255, 255, 255, 0.98)',
+          backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'white',
-          fontSize: 18,
-          zIndex: 9999
+          zIndex: 9999,
+          animation: 'fadeIn 0.2s ease-out'
         }}>
           <div style={{
-            background: 'rgba(0, 0, 0, 0.9)',
-            padding: '30px 50px',
-            borderRadius: 12,
+            background: 'white',
+            padding: '40px 60px',
+            borderRadius: '16px',
             textAlign: 'center',
-            maxWidth: '400px'
+            maxWidth: '480px',
+            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04)',
+            border: '1px solid #F3F4F6',
+            position: 'relative',
+            overflow: 'hidden'
           }}>
-            <div style={{ marginBottom: '15px' }}>
-              🔄 Loading PDF with Adobe Viewer...
-            </div>
-            <div style={{ fontSize: '14px', color: '#ccc', marginBottom: '10px' }}>
-              {fileName}
-            </div>
-            <div style={{ fontSize: '12px', color: '#999' }}>
-              Large files may take up to 30 seconds to load
-            </div>
+            {/* Animated background gradient */}
             <div style={{
-              width: '100%',
-              height: '4px',
-              background: '#333',
-              borderRadius: '2px',
-              marginTop: '15px',
-              overflow: 'hidden'
-            }}>
+              position: 'absolute',
+              top: '-50%',
+              left: '-50%',
+              width: '200%',
+              height: '200%',
+              background: 'radial-gradient(circle, rgba(220, 38, 38, 0.03) 0%, transparent 70%)',
+              animation: 'rotate 10s linear infinite',
+              pointerEvents: 'none'
+            }} />
+            
+            {/* Content */}
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              {/* Document icon with animation */}
+              <div style={{
+                marginBottom: '24px',
+                display: 'flex',
+                justifyContent: 'center'
+              }}>
+                <div style={{
+                  width: '72px',
+                  height: '72px',
+                  borderRadius: '18px',
+                  background: 'linear-gradient(135deg, #DC2626 0%, #EF4444 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 8px 24px -4px rgba(220, 38, 38, 0.25)',
+                  animation: 'pulse 2s ease-in-out infinite'
+                }}>
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                </div>
+              </div>
+
+              {/* Adobe logo accent */}
+              <div style={{
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}>
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  background: '#DC2626',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  fontWeight: '700',
+                  color: 'white',
+                  fontFamily: 'system-ui, -apple-system, sans-serif'
+                }}>
+                  A
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#4B5563',
+                  letterSpacing: '0.02em'
+                }}>
+                  Adobe Acrobat
+                </div>
+              </div>
+
+              {/* Loading text */}
+              <div style={{
+                fontSize: '20px',
+                fontWeight: '600',
+                color: '#1F2937',
+                marginBottom: '12px',
+                letterSpacing: '-0.02em'
+              }}>
+                Loading PDF Document
+              </div>
+
+              {/* File name */}
+              {fileName && fileName !== 'Untitled' ? (
+                <div style={{
+                  fontSize: '14px',
+                  color: '#6B7280',
+                  marginBottom: '24px',
+                  fontWeight: '500',
+                  wordBreak: 'break-word',
+                  padding: '0 20px'
+                }}>
+                  {fileName}
+                </div>
+              ) : (
+                <div style={{
+                  fontSize: '14px',
+                  color: '#9CA3AF',
+                  marginBottom: '24px',
+                  fontStyle: 'italic'
+                }}>
+                  Retrieving file information...
+                </div>
+              )}
+
+              {/* Progress bar */}
               <div style={{
                 width: '100%',
-                height: '100%',
-                background: 'linear-gradient(90deg, #4f46e5, #7c3aed, #4f46e5)',
-                animation: 'loading-pulse 2s ease-in-out infinite'
-              }} />
+                height: '6px',
+                background: '#F3F4F6',
+                borderRadius: '999px',
+                overflow: 'hidden',
+                position: 'relative',
+                boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.05)'
+              }}>
+                <div style={{
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #DC2626 0%, #EF4444 50%, #DC2626 100%)',
+                  borderRadius: '999px',
+                  animation: 'loading-bar 1.5s ease-in-out infinite',
+                  boxShadow: '0 0 8px rgba(220, 38, 38, 0.3)'
+                }} />
+              </div>
+
+              {/* Helper text */}
+              <div style={{
+                fontSize: '12px',
+                color: '#9CA3AF',
+                marginTop: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}>
+                <div style={{
+                  width: '5px',
+                  height: '5px',
+                  borderRadius: '50%',
+                  background: '#DC2626',
+                  animation: 'blink 1.4s infinite'
+                }} />
+                <span>Preparing your document</span>
+                <div style={{
+                  width: '5px',
+                  height: '5px',
+                  borderRadius: '50%',
+                  background: '#DC2626',
+                  animation: 'blink 1.4s infinite 0.2s'
+                }} />
+              </div>
             </div>
           </div>
         </div>
       )}
       
       <style>{`
-        @keyframes loading-pulse {
-          0%, 100% { opacity: 0.4; }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes pulse {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 8px 24px -4px rgba(220, 38, 38, 0.25);
+          }
+          50% {
+            transform: scale(1.05);
+            box-shadow: 0 12px 32px -4px rgba(220, 38, 38, 0.4);
+          }
+        }
+        
+        @keyframes loading-bar {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+        
+        @keyframes rotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        
+        @keyframes blink {
+          0%, 100% { opacity: 0.3; }
           50% { opacity: 1; }
         }
       `}</style>

@@ -52,7 +52,9 @@ router.get('/file/:fileId', requireAuth, async (req, res, next) => {
     const { data, mimeType, fileName } = await getFileBytes(req.oauthTokens, fileId);
     res.setHeader('Content-Type', mimeType || 'application/pdf');
     if (fileName) {
-      res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+      // Use both formats for better compatibility
+      const encodedFileName = encodeURIComponent(fileName);
+      res.setHeader('Content-Disposition', `inline; filename="${fileName}"; filename*=UTF-8''${encodedFileName}`);
     }
     res.send(Buffer.from(data));
   } catch (err) { next(err); }

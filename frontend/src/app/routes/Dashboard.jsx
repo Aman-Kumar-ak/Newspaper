@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [groups, setGroups] = useState([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
+  const [specificDate, setSpecificDate] = useState('');
   const [openProfile, setOpenProfile] = useState(false);
   const [openUpload, setOpenUpload] = useState(false);
   const [trayItems, setTrayItems] = useState([]);
@@ -122,7 +123,7 @@ export default function Dashboard() {
     }
   }, [openProfile]);
 
-  function applyFilter(groupsIn, f) {
+    function applyFilter(groupsIn, f, specificDateValue = '') {
     if (f === 'All') return groupsIn;
     const now = new Date();
     const isInRange = (dateStr) => {
@@ -131,6 +132,12 @@ export default function Dashboard() {
       if (f === 'Today') return dt.toDateString() === now.toDateString();
       if (f === 'Last7') return (now - dt) / 86400000 <= 7;
       if (f === 'ThisMonth') return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+      if (f === 'Specific' && specificDateValue) {
+        // Convert YYYY-MM-DD to DD-MM-YYYY for comparison
+        const [year, month, day] = specificDateValue.split('-');
+        const formattedDate = `${day}-${month}-${year}`;
+        return dateStr === formattedDate;
+      }
       return true;
     };
     return groupsIn.filter(g => isInRange(g.date));
@@ -280,33 +287,33 @@ export default function Dashboard() {
             <div style={{
               position: 'absolute',
               top: '76px',
-              // aligns under the filter button
               transform: 'translateX(-60px)',
               background: 'white',
               border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              padding: '8px 0',
-              minWidth: '160px',
+              borderRadius: '8px',
+              padding: '4px 0',
+              minWidth: '110px',
               zIndex: 9998,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
               {['All', 'Today', 'Last 7 days', 'This month'].map((option) => (
                 <button
                   key={option}
                   onClick={async () => {
                     setFilter(option);
+                    setSpecificDate('');
                     setShowDateFilter(false);
-            const all = await listAllGrouped();
+                    const all = await listAllGrouped();
                     setGroups(applyFilter(all, option));
                   }}
                   style={{
                     width: '100%',
-                    padding: '8px 16px',
+                    padding: '6px 10px',
                     border: 'none',
                     background: 'transparent',
                     textAlign: 'left',
                     cursor: 'pointer',
-                    fontSize: '14px',
+                    fontSize: '12px',
                     color: filter === option ? '#3B82F6' : '#374151',
                     fontWeight: filter === option ? 500 : 400,
                   }}
@@ -314,6 +321,32 @@ export default function Dashboard() {
                   {option}
                 </button>
               ))}
+              <div style={{ borderTop: '1px solid #F3F4F6', margin: '4px 0' }} />
+              <div style={{ padding: '6px 10px' }}>
+                <input
+                  type="date"
+                  value={specificDate}
+                  onChange={async (e) => {
+                    const selectedDate = e.target.value;
+                    setSpecificDate(selectedDate);
+                    if (selectedDate) {
+                      setFilter('Specific');
+                      const all = await listAllGrouped();
+                      setGroups(applyFilter(all, 'Specific', selectedDate));
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '4px 6px',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    color: '#374151',
+                    cursor: 'pointer',
+                  }}
+                  placeholder="Select date"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -512,7 +545,10 @@ export default function Dashboard() {
                       {group.files.map((file) => (
                         <div
                           key={file.fileId}
-                          onClick={() => window.open(`${window.location.origin}/#/viewer/${file.fileId}`, '_blank')}
+                          onClick={() => {
+                            const fileName = encodeURIComponent(file.fileName || 'document.pdf');
+                            window.open(`${window.location.origin}/#/viewer/${file.fileId}?name=${fileName}`, '_blank');
+                          }}
                           style={{
                             background: '#F9FAFB',
                             borderRadius: '10px',
