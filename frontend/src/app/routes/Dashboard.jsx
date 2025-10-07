@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from 'react';
 import { startGoogleLogin, tryReadTokensFromCallbackPayload, logoutGoogle } from '../../lib/auth';
 import { setTokens, getTokens } from '../../state/authStore';
 import { listAllGrouped, uploadWithProgress, deleteFile, getGroupForDate } from '../../lib/drive';
-import FolderList from '../../components/drive/FolderList.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import UploadTray from '../../components/ui/UploadTray.jsx';
 import Toast from '../../components/ui/Toast.jsx';
@@ -24,7 +23,10 @@ export default function Dashboard() {
   const [uploadPct, setUploadPct] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('Uploading');
+  const [expandedDates, setExpandedDates] = useState(new Set());
+  const [showDateFilter, setShowDateFilter] = useState(false);
   const profileMenuRef = useRef(null);
+  const dateFilterRef = useRef(null);
 
   useEffect(() => {
     // On mount, capture tokens from URL hash (after OAuth) and load data
@@ -55,6 +57,9 @@ export default function Dashboard() {
           // When user hard refreshes the page, fetch latest from Drive (fresh)
           const g = await listAllGrouped({ fresh: true });
           setGroups(applyFilter(g, filter));
+          // Set all dates as expanded by default
+          const allDates = new Set(g.map(group => group.date));
+          setExpandedDates(allDates);
         } finally { setLoading(false); }
       }
     })();
@@ -63,22 +68,25 @@ export default function Dashboard() {
   // Always get latest tokens for profile info
   const tokens = getTokens();
 
-  // Handle click outside profile menu to close it
+  // Handle click outside profile menu and date filter to close them
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
         setOpenProfile(false);
       }
+      if (dateFilterRef.current && !dateFilterRef.current.contains(event.target)) {
+        setShowDateFilter(false);
+      }
     };
 
-    if (openProfile) {
+    if (openProfile || showDateFilter) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [openProfile]);
+  }, [openProfile, showDateFilter]);
 
   function applyFilter(groupsIn, f) {
     if (f === 'All') return groupsIn;
@@ -94,6 +102,38 @@ export default function Dashboard() {
     return groupsIn.filter(g => isInRange(g.date));
   }
 
+  function applySearch(groupsIn, searchTerm) {
+    if (!searchTerm.trim()) return groupsIn;
+    return groupsIn.map(group => ({
+      ...group,
+      files: group.files.filter(file => 
+        file.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    })).filter(group => group.files.length > 0);
+  }
+
+  function toggleDateExpansion(date) {
+    setExpandedDates(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(date)) {
+        newSet.delete(date);
+      } else {
+        newSet.add(date);
+      }
+      return newSet;
+    });
+  }
+
+  function formatDateForDisplay(dateStr) {
+    const [d, m, y] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString('en-GB', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric' 
+    });
+  }
+
   if (!tokens.accessToken) {
     return (
       <div style={{ padding: 16 }}>
@@ -103,196 +143,465 @@ export default function Dashboard() {
     );
   }
 
+  const filteredGroups = applySearch(applyFilter(groups, filter), search);
+
   return (
     <div style={{ 
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-      fontFamily: 'Georgia, Times New Roman, Times, serif',
-      color: '#222',
+      background: '#E5FBFF',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      color: '#374151',
       overflow: 'hidden',
     }}>
-      {/* News-style Header */}
+      {/* Header */}
       <div style={{ 
-        padding: '24px 0 12px 0',
-        borderBottom: '3px solid #d90429',
-        background: 'white',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-        textAlign: 'center',
-        letterSpacing: '1px',
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
+        alignItems: 'center',
+        padding: '24px 32px',
+        background: '#E5FBFF',
+        width: 'calc(100% - 120px)',
+        marginLeft: 0,
+        marginRight: '120px',
       }}>
-        <span style={{
-          fontSize: '2.6rem',
-          fontWeight: 900,
-          color: '#d90429',
-          fontFamily: 'Merriweather, Georgia, serif',
-          textTransform: 'uppercase',
-          marginRight: 8,
-        }}>Newspaper PDF Viewer</span>
-        <span style={{
-          fontSize: '1.1rem',
+        {/* Left: Title */}
+        <h1 style={{
+          fontSize: '1.5rem',
+          fontWeight: 600,
           color: '#374151',
-          fontWeight: 500,
-          fontFamily: 'system-ui, sans-serif',
+          margin: 0,
         }}>
-          | Your Digital News Library
-        </span>
-      </div>
-      {/* Topbar for actions */}
+          Digital News Library
+        </h1>
+
+        {/* Center Group: Search + Filter */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10 }}>
       <div style={{
+            position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'flex-start',
-        maxWidth: '90vw',
-        margin: '0 auto',
-        padding: '18px 0 0 0',
-        gap: 24,
-        position: 'relative',
-      }}>
-        {/* Upload and Search/Filter Controls */}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button style={{
-            background: '#d90429',
-            color: 'white',
-            border: 'none',
-            borderRadius: 6,
-            fontWeight: 700,
-            fontSize: '1rem',
-            padding: '8px 18px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-            cursor: 'pointer',
-          }} onClick={() => setOpenUpload(true)}>
-            Upload PDF
-          </button>
-          <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{
-            padding: '6px 12px',
-            borderRadius: 6,
-            border: '1px solid #d1d5db',
-            fontSize: '1rem',
-          }} />
-          <select value={filter} onChange={async (e) => {
-            const v = e.target.value;
-            setFilter(v);
-            const all = await listAllGrouped();
-            setGroups(applyFilter(all, v));
-          }} style={{
-            padding: '6px 12px',
-            borderRadius: 6,
-            border: '1px solid #d1d5db',
-            fontSize: '1rem',
+            background: '#B8E6F0',
+            borderRadius: '16px',
+            padding: '12px 16px',
+            width: '50%',
+            maxWidth: '720px',
+            minWidth: '420px',
           }}>
-            <option value="All">All</option>
-            <option value="Today">Today</option>
-            <option value="Last7">Last 7 days</option>
-            <option value="ThisMonth">This month</option>
-          </select>
-        </div>
-        <div style={{ flex: 1 }} />
-        {/* Profile Icon aligned to the right */}
-        <div style={{ position: 'relative', marginLeft: 'auto' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ marginRight: '8px', color: '#6B7280' }}>
+              <path d="M21 21L16.514 16.506L21 21ZM19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search in Library"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                fontSize: '14px',
+                color: '#374151',
+                width: '100%',
+              }}
+            />
+          </div>
+
+          {/* Filter Button right next to search */}
+          <div style={{ display: 'flex', alignItems: 'center' }} ref={dateFilterRef}>
           <button
+            onClick={() => setShowDateFilter(!showDateFilter)}
             style={{
-              background: 'linear-gradient(135deg, #ECF8F8 60%, #5DB7DE 100%)',
-              color: '#0D21A1',
+              background: '#B8E6F0',
+            border: 'none',
+              borderRadius: '50%',
+              width: 40,
+              height: 40,
+            cursor: 'pointer',
+              display: 'grid',
+              placeItems: 'center',
+              color: '#0F172A',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+            }}
+            title="Filter"
+            aria-label="Open filter options"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" style={{ display: 'block', transform: 'translate(-9px)' }}>
+              <path d="M3 5h18l-7 8v5l-4 2v-7L3 5z" fill="currentColor" />
+            </svg>
+          </button>
+          {showDateFilter && (
+            <div style={{
+              position: 'absolute',
+              top: '76px',
+              // aligns under the filter button
+              transform: 'translateX(-60px)',
+              background: 'white',
+              border: '1px solid #E5E7EB',
+              borderRadius: '12px',
+              padding: '8px 0',
+              minWidth: '160px',
+              zIndex: 20,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }}>
+              {['All', 'Today', 'Last 7 days', 'This month'].map((option) => (
+                <button
+                  key={option}
+                  onClick={async () => {
+                    setFilter(option);
+                    setShowDateFilter(false);
+            const all = await listAllGrouped();
+                    setGroups(applyFilter(all, option));
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 16px',
+                    border: 'none',
+                    background: 'transparent',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: filter === option ? '#3B82F6' : '#374151',
+                    fontWeight: filter === option ? 500 : 400,
+                  }}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Close Center Group */}
+        </div>
+
+        {/* Right: Profile */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', justifySelf: 'end', transform: 'translateX(var(--profile-right-shift, 0px))' }}>
+          {/* Profile Icon */}
+          <div style={{ position: 'relative' }} ref={profileMenuRef}>
+          <button
+              onClick={() => setOpenProfile(!openProfile)}
+            style={{
+                background: '#B8E6F0',
               border: 'none',
               borderRadius: '50%',
-              width: 44,
-              height: 44,
-              fontWeight: 700,
-              fontSize: '1.2rem',
-              boxShadow: '0 2px 8px rgba(13,33,161,0.08)',
+                width: '40px',
+                height: '40px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'box-shadow 0.2s',
+                fontSize: '16px',
+                fontWeight: 600,
+                color: '#374151',
             }}
-            onClick={() => setOpenProfile(v => !v)}
-            title="Profile"
           >
             {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
           </button>
           {openProfile && (
             <div style={{
               position: 'absolute',
-              top: 54,
+                top: '100%',
               right: 0,
-              background: '#fff',
-              border: '1px solid #E7D8C9',
-              borderRadius: 16,
-              padding: 18,
-              minWidth: 220,
+                background: 'white',
+                border: '1px solid #E5E7EB',
+                borderRadius: '12px',
+                padding: '12px 0',
+                minWidth: '200px',
               zIndex: 20,
-              boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-              fontFamily: 'system-ui, sans-serif',
-            }}>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0D21A1', marginBottom: 4 }}>{tokens?.username || 'User Name'}</div>
-              <div style={{ color: '#374151', fontSize: 13, marginBottom: 12 }}>{tokens?.email || 'user@email.com'}</div>
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                marginTop: '8px',
+              }}>
+                <div style={{ padding: '0 16px 8px', borderBottom: '1px solid #F3F4F6' }}>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#111827' }}>
+                    {tokens?.username || 'User Name'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                    {tokens?.email || 'user@email.com'}
+                  </div>
+                </div>
               <button style={{
-                background: '#d90429',
-                color: '#fff',
-                border: '1px solid #b10320',
-                borderRadius: 10,
-                fontWeight: 800,
-                letterSpacing: 0.3,
-                fontSize: '1rem',
-                padding: '10px 20px',
-                boxShadow: '0 4px 14px rgba(217,4,41,0.18)',
+                  width: '100%',
+                  padding: '8px 16px',
+                border: 'none',
+                  background: 'transparent',
+                  textAlign: 'left',
                 cursor: 'pointer',
-                width: '100%',
-                marginTop: 10,
-                transition: 'transform 0.06s ease, box-shadow 0.2s ease, background 0.2s ease',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 6px 18px rgba(217,4,41,0.28)'; e.currentTarget.style.background = '#c10324'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(217,4,41,0.18)'; e.currentTarget.style.background = '#d90429'; }}
-              onMouseDown={(e) => { e.currentTarget.style.transform = 'translateY(1px)'; }}
-              onMouseUp={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
-              aria-label="Log out"
-              onClick={async () => {
+                  fontSize: '14px',
+                  color: '#374151',
+                }}>
+                  Settings
+                </button>
+                <button
+                  onClick={async () => {
                 setLoadingLabel('Signing out...');
                 setLoading(true);
                 await logoutGoogle();
                 localStorage.removeItem('googleTokens');
                 window.location.reload();
-              }}>Log out</button>
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 16px',
+                    border: 'none',
+                    background: 'transparent',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: '#DC2626',
+                  }}
+                >
+                  Logout
+                </button>
             </div>
           )}
+          </div>
         </div>
       </div>
-      {/* Scrollable Content Area */}
+
+      {/* Main Content Area */}
       <div style={{ 
         flex: 1,
-        overflow: 'auto',
-        minHeight: 0,
-        width: '75vw',
-        maxWidth: '80vw',
-        margin: '0 auto',
-        padding: '32px 0',
+        background: '#FFFFFF',
+        width: 'calc(100% - 70px)',
+        marginLeft: 0,
+        marginRight: '120px',
+        borderRadius: '0 16px 0 0',
+        border: '1px solid #E5E7EB',
+        position: 'relative',
+        overflow: 'visible',
       }}>
-        {groups.length === 0 ? (
-          <div style={{ textAlign: 'center', marginTop: '40px', fontSize: '1.2rem', color: '#d90429' }}>No files yet. Upload your first PDF.</div>
-        ) : (
-          <div style={{ paddingBottom: '20px' }}>
-            <FolderList
-              groups={groups}
-              search={search}
-              onOpen={(file) => {
-                window.open(`${window.location.origin}/#/viewer/${file.fileId}`, '_blank');
-              }}
-              onDelete={async (file) => {
+        {/* Fixed Upload Button */}
+        <button
+          onClick={() => setOpenUpload(true)}
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: 'calc(120px + 24px)',
+            background: '#3B82F6',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '12px',
+            padding: '12px 20px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: 500,
+            zIndex: 1000,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          }}
+        >
+          Upload
+        </button>
+
+        {/* Scrollable Content */}
+        <div className="main-scroll" style={{
+          height: '100%',
+          overflow: 'auto',
+          padding: '24px',
+          paddingTop: '80px',
+        }}>
+          {filteredGroups.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              marginTop: '60px',
+              fontSize: '16px',
+              color: '#6B7280',
+            }}>
+              {search ? 'No files found matching your search.' : 'No files yet. Upload your first PDF.'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {filteredGroups.map((group) => (
+                <div key={group.date} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Date Header */}
+                  <button
+                    onClick={() => toggleDateExpansion(group.date)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '8px 0',
+                      fontSize: '16px',
+                      fontWeight: 500,
+                      color: '#374151',
+                    }}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      style={{
+                        transform: expandedDates.has(group.date) ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease',
+                      }}
+                    >
+                      <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {formatDateForDisplay(group.date)}
+                  </button>
+
+                  {/* Files Grid */}
+                  {expandedDates.has(group.date) && (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                      gap: '20px',
+                      marginLeft: '24px',
+                    }}>
+                      {group.files.map((file) => (
+                        <div
+                          key={file.fileId}
+                          style={{
+                            background: '#F9FAFB',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            border: '1px solid #E5E7EB',
+                            position: 'relative',
+                          }}
+                        >
+                          {/* Three-dot menu */}
+                          <button
+                            style={{
+                              position: 'absolute',
+                              top: '12px',
+                              right: '12px',
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              color: '#6B7280',
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                              <circle cx="12" cy="5" r="2" fill="currentColor"/>
+                              <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                              <circle cx="12" cy="19" r="2" fill="currentColor"/>
+                            </svg>
+                          </button>
+
+                          {/* Times of India label */}
+                          <div style={{
+                            fontSize: '12px',
+                            color: '#6B7280',
+                            marginBottom: '8px',
+                            fontWeight: 500,
+                          }}>
+                            Times of India
+                          </div>
+
+                          {/* Newspaper Preview */}
+                          <div style={{
+                            background: 'white',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            marginBottom: '12px',
+                            border: '1px solid #E5E7EB',
+                            minHeight: '200px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                          }}>
+                            <div style={{
+                              fontSize: '18px',
+                              fontWeight: 700,
+                              color: '#111827',
+                              marginBottom: '8px',
+                              fontFamily: 'serif',
+                            }}>
+                              DAILY NEWS
+                            </div>
+                            <div style={{
+                              fontSize: '14px',
+                              color: '#6B7280',
+                              marginBottom: '16px',
+                            }}>
+                              Your headline
+                            </div>
+                            <div style={{
+                              fontSize: '10px',
+                              color: '#9CA3AF',
+                              lineHeight: '1.4',
+                              textAlign: 'left',
+                              width: '100%',
+                            }}>
+                              <div style={{ marginBottom: '4px' }}>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</div>
+                              <div style={{ marginBottom: '4px' }}>Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</div>
+                              <div style={{ marginBottom: '4px' }}>Ut enim ad minim veniam, quis nostrud exercitation.</div>
+                              <div>Duis aute irure dolor in reprehenderit in voluptate velit esse.</div>
+                            </div>
+                          </div>
+
+                          {/* File name */}
+                          <div style={{
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            color: '#111827',
+                            marginBottom: '12px',
+                            wordBreak: 'break-word',
+                          }}>
+                            {file.name}
+                          </div>
+
+                          {/* Action buttons */}
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={() => window.open(`${window.location.origin}/#/viewer/${file.fileId}`, '_blank')}
+                              style={{
+                                flex: 1,
+                                background: '#3B82F6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '8px 12px',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Open
+                            </button>
+                            <button
+                              onClick={async () => {
                 const ok = confirm('Delete this file?');
                 if (!ok) return;
                 await deleteFile(file.fileId);
-                const updated = await getGroupForDate(file.folderDate || groups.find(g => g.files.some(f => f.fileId === file.fileId))?.date);
+                                const updated = await getGroupForDate(file.folderDate || group.date);
                 setGroups(prev => {
                   const others = prev.filter(g => g.date !== updated.date);
                   return applyFilter([updated, ...others], filter);
                 });
               }}
-            />
+                              style={{
+                                flex: 1,
+                                background: 'transparent',
+                                color: '#DC2626',
+                                border: '1px solid #DC2626',
+                                borderRadius: '8px',
+                                padding: '8px 12px',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
         )}
+        </div>
       </div>
 
       <Modal open={openUpload} title="Upload PDF" onClose={() => setOpenUpload(false)}>
