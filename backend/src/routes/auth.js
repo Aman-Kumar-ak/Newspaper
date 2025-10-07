@@ -27,6 +27,8 @@ router.get('/google/callback', async (req, res, next) => {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token || '',
       })).toString('base64url');
+      // Redirect with hash for compatibility (hash params don't go to server)
+      // Frontend will extract tokens and clean the URL
       return res.redirect(`${frontend}/#tokens=${payload}`);
     } catch {
       // Fallback to raw JSON if encoding fails

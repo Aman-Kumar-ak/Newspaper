@@ -12,7 +12,9 @@ function getAuthUrl() {
   const oauth2Client = getOAuthClient();
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'consent',
+    // 'select_account' lets users pick account but skips consent if already granted
+    // This allows quick re-login while giving option to switch accounts
+    prompt: 'select_account',
     scope: SCOPES,
   });
 }
