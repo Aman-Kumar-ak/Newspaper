@@ -17,6 +17,11 @@ function authHeaders() {
   const h = new Headers();
   if (accessToken) h.set('x-google-access-token', accessToken);
   if (refreshToken) h.set('x-google-refresh-token', refreshToken);
+  
+  if (!accessToken) {
+    console.warn('⚠️ Authentication token missing');
+  }
+  
   return h;
 }
 
@@ -71,8 +76,19 @@ export function uploadWithProgress(date, file, onProgress, folderExists = true) 
   const xhr = new XMLHttpRequest();
   const url = `${API_BASE}/drive/upload`;
   xhr.open('POST', url, true);
-  const headers = authHeaders();
-  for (const [k, v] of headers.entries()) xhr.setRequestHeader(k, v);
+  
+  // Get tokens and set headers
+  const { accessToken, refreshToken } = getTokens();
+  if (!accessToken) {
+    console.error('No access token found - user may not be authenticated');
+    const promise = Promise.reject(new Error('Not authenticated. Please log in again.'));
+    return { xhr, promise };
+  }
+  
+  xhr.setRequestHeader('x-google-access-token', accessToken);
+  if (refreshToken) {
+    xhr.setRequestHeader('x-google-refresh-token', refreshToken);
+  }
   
   if (xhr.upload && typeof onProgress === 'function') {
     xhr.upload.onprogress = (e) => {
@@ -92,6 +108,8 @@ export function uploadWithProgress(date, file, onProgress, folderExists = true) 
         if (xhr.status >= 200 && xhr.status < 300) {
           try { resolve(JSON.parse(xhr.responseText || '{}')); }
           catch { resolve({}); }
+        } else if (xhr.status === 401) {
+          reject(new Error('Authentication failed. Please log in again.'));
         } else {
           reject(new Error(xhr.statusText || 'Upload failed'));
         }
@@ -143,13 +161,7 @@ export async function deleteFile(fileId) {
 }
 
 export async function getFileBytes(fileId) {
-  console.log('getFileBytes called with fileId:', fileId);
-  console.log('API_BASE:', API_BASE);
-  console.log('Auth headers:', authHeaders());
-  
   const res = await fetch(`${API_BASE}/drive/file/${fileId}`, { headers: authHeaders() });
-  console.log('Response status:', res.status);
-  console.log('Response headers:', res.headers);
   
   if (!res.ok) {
     const errorText = await res.text();
@@ -159,41 +171,43 @@ export async function getFileBytes(fileId) {
   
   // Get file name from response headers if available
   const contentDisposition = res.headers.get('content-disposition');
-  console.log('Content-Disposition header:', contentDisposition);
   
   let fileName = 'document.pdf'; // Default fallback
   if (contentDisposition) {
     // Try different patterns to extract filename
-    const patterns = [
-      /filename\*=UTF-8''([^;\s]+)/,  // RFC 5987 format (try first)
-      /filename="([^"]+)"/,            // Quoted format
-      /filename=([^;\s]+)/             // Unquoted format
-    ];
-    
-    for (const pattern of patterns) {
-      const match = contentDisposition.match(pattern);
-      if (match) {
-        let extracted = match[1].trim();
-        // Remove quotes if present
-        extracted = extracted.replace(/^"|"$/g, '');
-        // Decode if it's URL encoded
-        try {
-          fileName = decodeURIComponent(extracted);
-          console.log('Successfully extracted filename:', fileName);
-          break;
-        } catch (e) {
-          fileName = extracted;
-          console.log('Using unencoded filename:', fileName);
-          break;
-        }
+    // Pattern 1: filename*=UTF-8''encoded-name (RFC 5987)
+    let match = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/i);
+    if (match) {
+      try {
+        fileName = decodeURIComponent(match[1]);
+      } catch (e) {
+        console.error('Error decoding filename');
       }
     }
+    
+    // Pattern 2: filename="quoted-name"
+    if (fileName === 'document.pdf') {
+      match = contentDisposition.match(/filename="([^"]+)"/i);
+      if (match) {
+        fileName = match[1];
+      }
+    }
+    
+    // Pattern 3: filename=unquoted-name
+    if (fileName === 'document.pdf') {
+      match = contentDisposition.match(/filename=([^;\s]+)/i);
+      if (match) {
+        let extracted = match[1].trim();
+        // Remove quotes if any
+        extracted = extracted.replace(/^["']|["']$/g, '');
+        fileName = extracted;
+      }
+    }
+  } else {
+    console.warn('⚠️ Content-Disposition header not found');
   }
   
-  console.log('Extracted filename:', fileName);
-  
   const bytes = await res.arrayBuffer();
-  console.log('Received bytes length:', bytes.byteLength);
   
   return { bytes, fileName };
 }

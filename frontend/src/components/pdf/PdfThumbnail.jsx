@@ -123,11 +123,9 @@ export default function PdfThumbnail({ fileId, fileName }) {
   if (loading) {
     return (
       <div style={{
+        width: '100%',
+        height: '100%',
         background: 'linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%)',
-        borderRadius: '6px',
-        padding: '16px',
-        border: '1px solid #E5E7EB',
-        minHeight: '140px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -145,9 +143,9 @@ export default function PdfThumbnail({ fileId, fileName }) {
           animation: 'shimmer 1.5s infinite',
         }} />
         <div style={{
-          width: '16px',
-          height: '16px',
-          border: '2px solid #E5E7EB',
+          width: '24px',
+          height: '24px',
+          border: '3px solid #E5E7EB',
           borderTopColor: '#3B82F6',
           borderRadius: '50%',
           animation: 'spin 0.6s linear infinite',
@@ -169,11 +167,9 @@ export default function PdfThumbnail({ fileId, fileName }) {
   if (error || !thumbnail) {
     return (
       <div style={{
+        width: '100%',
+        height: '100%',
         background: 'white',
-        borderRadius: '6px',
-        padding: '16px',
-        border: '1px solid #E5E7EB',
-        minHeight: '140px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -209,11 +205,9 @@ export default function PdfThumbnail({ fileId, fileName }) {
 
   return (
     <div style={{
+      width: '100%',
+      height: '100%',
       background: 'white',
-      borderRadius: '6px',
-      padding: '4px',
-      border: '1px solid #E5E7EB',
-      minHeight: '140px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -225,10 +219,8 @@ export default function PdfThumbnail({ fileId, fileName }) {
         alt={fileName || 'PDF Preview'}
         style={{
           width: '100%',
-          height: 'auto',
-          maxHeight: '180px',
-          objectFit: 'contain',
-          borderRadius: '4px',
+          height: '100%',
+          objectFit: 'cover',
         }}
       />
     </div>

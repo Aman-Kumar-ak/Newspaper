@@ -43,6 +43,8 @@ export default function Dashboard() {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [openMenuFileId, setOpenMenuFileId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { fileId, fileName }
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [redirectTimer, setRedirectTimer] = useState(5);
   const profileMenuRef = useRef(null);
   const profileBtnRef = useRef(null);
   const [profileMenuPos, setProfileMenuPos] = useState({ top: 0, left: 0 });
@@ -81,6 +83,12 @@ export default function Dashboard() {
           // Set all dates as expanded by default
           const allDates = new Set(g.map(group => group.date));
           setExpandedDates(allDates);
+        } catch (error) {
+          console.error('Error loading files:', error);
+          // Check if it's an authentication error
+          if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+            setSessionExpired(true);
+          }
         } finally { setLoading(false); }
       }
     })();
@@ -88,6 +96,28 @@ export default function Dashboard() {
 
   // Always get latest tokens for profile info
   const tokens = getTokens();
+
+  // Auto-redirect timer for session expired modal
+  useEffect(() => {
+    let timer;
+    if (sessionExpired && redirectTimer > 0) {
+      timer = setInterval(() => {
+        setRedirectTimer(prev => prev - 1);
+      }, 1000);
+    } else if (sessionExpired && redirectTimer === 0) {
+      window.location.hash = '#/login';
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [sessionExpired, redirectTimer]);
+
+  // Reset timer when modal opens
+  useEffect(() => {
+    if (sessionExpired) {
+      setRedirectTimer(5);
+    }
+  }, [sessionExpired]);
 
   // Handle click outside profile menu and date filter to close them
   useEffect(() => {
@@ -538,8 +568,8 @@ export default function Dashboard() {
                   {expandedDates.has(group.date) && (
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                      gap: '16px',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                      gap: '20px',
                       marginLeft: '24px',
                     }}>
                       {group.files.map((file) => (
@@ -550,44 +580,46 @@ export default function Dashboard() {
                             window.open(`${window.location.origin}/#/viewer/${file.fileId}?name=${fileName}`, '_blank');
                           }}
                           style={{
-                            background: '#F9FAFB',
-                            borderRadius: '10px',
-                            padding: '12px',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                            border: '1px solid #E5E7EB',
+                            background: 'white',
+                            borderRadius: '16px',
+                            padding: '0',
+                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+                            border: '1px solid #F3F4F6',
                             position: 'relative',
                             cursor: 'pointer',
-                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'translateY(-2px)';
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                            overflow: 'hidden',
                           }}
                         >
                           {/* Three-dot menu */}
-                          <div style={{ position: 'relative' }} ref={openMenuFileId === file.fileId ? menuRef : null}>
+                          <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 20 }} ref={openMenuFileId === file.fileId ? menuRef : null}>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenMenuFileId(openMenuFileId === file.fileId ? null : file.fileId);
                               }}
                               style={{
-                                position: 'absolute',
-                                top: '-2px',
-                                right: '-2px',
-                                background: 'transparent',
+                                background: 'rgba(255, 255, 255, 0.95)',
                                 border: 'none',
                                 cursor: 'pointer',
-                                padding: '4px',
+                                padding: '6px',
                                 color: '#6B7280',
-                                zIndex: 10,
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                                transition: 'all 0.2s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'white';
+                                e.currentTarget.style.color = '#1F2937';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
+                                e.currentTarget.style.color = '#6B7280';
                               }}
                             >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                                 <circle cx="12" cy="5" r="2" fill="currentColor"/>
                                 <circle cx="12" cy="12" r="2" fill="currentColor"/>
                                 <circle cx="12" cy="19" r="2" fill="currentColor"/>
@@ -597,14 +629,15 @@ export default function Dashboard() {
                             {openMenuFileId === file.fileId && (
                               <div style={{
                                 position: 'absolute',
-                                top: '20px',
+                                top: '40px',
                                 right: '0',
                                 background: 'white',
-                                border: '1px solid #E5E7EB',
-                                borderRadius: '8px',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                minWidth: '120px',
+                                border: '1px solid #F3F4F6',
+                                borderRadius: '12px',
+                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                                minWidth: '140px',
                                 zIndex: 100,
+                                overflow: 'hidden',
                               }}>
                                 <button
                                   onClick={(e) => {
@@ -614,7 +647,7 @@ export default function Dashboard() {
                                   }}
                                   style={{
                                     width: '100%',
-                                    padding: '8px 12px',
+                                    padding: '10px 14px',
                                     border: 'none',
                                     background: 'transparent',
                                     textAlign: 'left',
@@ -622,33 +655,75 @@ export default function Dashboard() {
                                     fontSize: '13px',
                                     color: '#DC2626',
                                     fontWeight: 500,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
                                   }}
                                   onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
                                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                 >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                  </svg>
                                   Delete
                                 </button>
                               </div>
                             )}
                           </div>
 
-                          {/* File name label */}
+                          {/* PDF Thumbnail Preview */}
                           <div style={{
-                            fontSize: '11px',
-                            color: '#6B7280',
-                            marginBottom: '6px',
-                            fontWeight: 500,
+                            width: '100%',
+                            aspectRatio: '1',
                             overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            paddingRight: '28px',
-                            maxWidth: '100%',
+                            background: '#F9FAFB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}>
-                            {file.fileName || file.name || 'Untitled'}
+                            <PdfThumbnail fileId={file.fileId} fileName={file.fileName || file.name} />
                           </div>
 
-                          {/* PDF Thumbnail Preview */}
-                          <PdfThumbnail fileId={file.fileId} fileName={file.fileName || file.name} />
+                          {/* File info section */}
+                          <div style={{
+                            padding: '14px 16px',
+                            background: 'linear-gradient(to bottom, white, #FAFBFC)',
+                          }}>
+                            {/* File name */}
+                            <div style={{
+                              fontSize: '13px',
+                              color: '#1F2937',
+                              fontWeight: 600,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              marginBottom: '4px',
+                              letterSpacing: '-0.01em',
+                            }}>
+                              {file.fileName || file.name || 'Untitled'}
+                            </div>
+                            
+                            {/* File type badge */}
+                            <div style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px',
+                              color: '#DC2626',
+                              fontWeight: 600,
+                              background: '#FEF2F2',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              letterSpacing: '0.02em',
+                            }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                <path d="M14 2v6h6"/>
+                                <path d="M9 13h6M9 17h6"/>
+                              </svg>
+                              PDF
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -856,7 +931,15 @@ export default function Dashboard() {
                         return sortByDate(applyFilter([updated, ...others], filter));
                       });
                     } catch (e) {
+                      console.error('Upload error:', e);
                       setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, status: 'error' } : x));
+                      
+                      // Show authentication error modal if 401
+                      if (e.message.includes('Authentication failed') || e.message.includes('Not authenticated')) {
+                        setSessionExpired(true);
+                      } else {
+                        setToast({ visible: true, message: 'Upload failed: ' + (e.message || 'Unknown error'), type: 'error' });
+                      }
                     }
                     setFile(null);
                     setDate('');
@@ -967,8 +1050,14 @@ export default function Dashboard() {
                     setToast({ visible: true, message: 'File deleted successfully' });
                     setTimeout(() => setToast({ visible: false, message: '' }), 3000);
                   } catch (e) {
-                    setToast({ visible: true, message: 'Failed to delete file' });
-                    setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                    console.error('Delete error:', e);
+                    // Check if it's an authentication error
+                    if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('Authentication failed')) {
+                      setSessionExpired(true);
+                    } else {
+                      setToast({ visible: true, message: 'Failed to delete file' });
+                      setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                    }
                   } finally {
                     setLoading(false);
                   }
@@ -988,6 +1077,125 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Session Expired Modal */}
+      {sessionExpired && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '440px',
+            width: '90%',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            animation: 'modalSlideIn 0.3s ease-out',
+          }}>
+            {/* Icon */}
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px',
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+
+            {/* Title */}
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#1F2937',
+              textAlign: 'center',
+              marginBottom: '12px',
+              letterSpacing: '-0.02em',
+            }}>
+              Session Expired
+            </h3>
+
+            {/* Message */}
+            <p style={{
+              fontSize: '14px',
+              color: '#6B7280',
+              textAlign: 'center',
+              lineHeight: '1.6',
+              marginBottom: '8px',
+            }}>
+              Your session has expired. Please log in again to continue using the Digital News Library.
+            </p>
+
+            {/* Timer message */}
+            <p style={{
+              fontSize: '12px',
+              color: '#9CA3AF',
+              textAlign: 'center',
+              marginBottom: '28px',
+            }}>
+              Redirecting in {redirectTimer} second{redirectTimer !== 1 ? 's' : ''}...
+            </p>
+
+            {/* Button */}
+            <button
+              onClick={() => {
+                setSessionExpired(false);
+                window.location.hash = '#/login';
+              }}
+              style={{
+                width: '100%',
+                padding: '14px 24px',
+                background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '15px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
+              }}
+            >
+              Go to Login Now
+            </button>
+          </div>
+
+          <style>{`
+            @keyframes modalSlideIn {
+              from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+              }
+            }
+          `}</style>
         </div>
       )}
     </div>
