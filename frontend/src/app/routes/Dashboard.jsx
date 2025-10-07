@@ -9,6 +9,12 @@ import Toast from '../../components/ui/Toast.jsx';
 import LoadingOverlay from '../../components/ui/LoadingOverlay.jsx';
 import PdfThumbnail from '../../components/pdf/PdfThumbnail.jsx';
 
+// Helper function for navigation
+const navigateTo = (path) => {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
 export default function Dashboard() {
   const [date, setDate] = useState(''); // DD-MM-YYYY for backend
   const [dateISO, setDateISO] = useState(''); // YYYY-MM-DD for <input type="date">
@@ -67,7 +73,7 @@ export default function Dashboard() {
     const existing = getTokens();
     if (!existing.accessToken && !t?.accessToken) {
       console.warn('⚠️ No authentication token found. Redirecting to login...');
-      window.location.hash = '#/login';
+      navigateTo('/login');
       return;
     }
     
@@ -99,7 +105,7 @@ export default function Dashboard() {
         setRedirectTimer(prev => prev - 1);
       }, 1000);
     } else if (sessionExpired && redirectTimer === 0) {
-      window.location.hash = '#/login';
+      navigateTo('/login');
     }
     return () => {
       if (timer) clearInterval(timer);
@@ -286,7 +292,7 @@ export default function Dashboard() {
       }}>
         {/* Left: Title */}
         <h1 
-          onClick={() => window.location.hash = '#/home'}
+          onClick={() => navigateTo('/home')}
           style={{
           fontSize: '1.5rem',
           fontWeight: 600,
@@ -498,7 +504,7 @@ export default function Dashboard() {
                 </div>
                 <button 
                   onClick={() => {
-                    window.location.hash = '#/settings';
+                    navigateTo('/settings');
                   }}
                   style={{
                   width: '100%',
@@ -517,7 +523,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={() => {
-                    window.location.hash = '#/privacy-policy';
+                    navigateTo('/privacy-policy');
                   }}
                   style={{
                     width: '100%',
@@ -536,7 +542,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={() => {
-                    window.location.hash = '#/terms-and-conditions';
+                    navigateTo('/terms-and-conditions');
                   }}
                   style={{
                     width: '100%',
@@ -559,7 +565,7 @@ export default function Dashboard() {
                     setLoading(true);
                     await logoutGoogle();
                     localStorage.removeItem('googleTokens');
-                    window.location.hash = '#/login';
+                    navigateTo('/login');
                   }}
                   style={{
                     width: '100%',
@@ -663,7 +669,7 @@ export default function Dashboard() {
                           key={file.fileId}
                           onClick={() => {
                             const fileName = encodeURIComponent(file.fileName || 'document.pdf');
-                            window.open(`${window.location.origin}/#/viewer/${file.fileId}?name=${fileName}`, '_blank');
+                            window.open(`${window.location.origin}/viewer/${file.fileId}?name=${fileName}`, '_blank');
                           }}
                           style={{
                             background: 'white',
@@ -1271,7 +1277,7 @@ export default function Dashboard() {
             <button
               onClick={() => {
                 setSessionExpired(false);
-                window.location.hash = '#/login';
+                navigateTo('/login');
               }}
               style={{
                 width: '100%',

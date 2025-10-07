@@ -11,11 +11,12 @@ import { setTokens } from './state/authStore'
 import LoadingOverlay from './components/ui/LoadingOverlay.jsx'
 
 export default function App() {
-  const [hash, setHash] = useState(window.location.hash || '#/');
+  const [path, setPath] = useState(window.location.pathname);
+  
   useEffect(() => {
-    const h = () => setHash(window.location.hash || '#/');
-    window.addEventListener('hashchange', h);
-    return () => window.removeEventListener('hashchange', h);
+    const handleNavigation = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', handleNavigation);
+    return () => window.removeEventListener('popstate', handleNavigation);
   }, []);
 
   // On first load, capture tokens from OAuth callback and redirect home
@@ -23,13 +24,13 @@ export default function App() {
     const t = tryReadTokensFromCallbackPayload();
     if (t && t.accessToken) {
       setTokens({ accessToken: t.accessToken, refreshToken: t.refreshToken || '' });
-      // Clean hash and go home
-      window.location.replace('#/home');
+      // Clean and go home
+      window.history.replaceState({}, '', '/home');
+      setPath('/home');
     }
   }, []);
 
   const authed = !!(localStorage.getItem('googleTokens'));
-  const path = hash.replace('#', '');
 
   // Public routes (accessible without authentication)
   if (path === '/login') return <Login />

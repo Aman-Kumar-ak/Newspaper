@@ -6,8 +6,14 @@ import Toast from '../../components/ui/Toast';
 // Adobe PDF Embed API key from environment variables
 const ADOBE_API_KEY = import.meta.env.VITE_ADOBE_CLIENT_ID;
 
+// Helper function for navigation
+const navigateTo = (path) => {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
 export default function PdfViewer() {
-  const [hash, setHash] = useState(window.location.hash || '#/');
+  const [pathname, setPathname] = useState(window.location.pathname);
   const adobeViewerRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,15 +28,15 @@ export default function PdfViewer() {
     const tokens = getTokens();
     if (!tokens.accessToken) {
       console.warn('⚠️ No authentication token found. Redirecting to login...');
-      window.location.hash = '#/login';
+      navigateTo('/login');
       return;
     }
   }, []);
   
   useEffect(() => {
-    const h = () => setHash(window.location.hash || '#/');
-    window.addEventListener('hashchange', h);
-    return () => window.removeEventListener('hashchange', h);
+    const handleNavigation = () => setPathname(window.location.pathname);
+    window.addEventListener('popstate', handleNavigation);
+    return () => window.removeEventListener('popstate', handleNavigation);
   }, []);
 
   // Auto-clear toast after 3 seconds
@@ -41,11 +47,11 @@ export default function PdfViewer() {
     }
   }, [toast]);
 
-  // Expected route: #/viewer/:fileId?name=filename
+  // Expected route: /viewer/:fileId?name=filename
   const { fileId, fileNameFromUrl } = useMemo(() => {
-    const p = (hash.replace('#', '') || '/').split('/');
-    if (p[1] === 'viewer' && p[2]) {
-      const [id, queryString] = p[2].split('?');
+    const p = pathname.split('/').filter(Boolean);
+    if (p[0] === 'viewer' && p[1]) {
+      const [id, queryString] = p[1].split('?');
       let name = '';
       if (queryString) {
         const params = new URLSearchParams(queryString);
@@ -54,7 +60,7 @@ export default function PdfViewer() {
       return { fileId: id, fileNameFromUrl: name };
     }
     return { fileId: '', fileNameFromUrl: '' };
-  }, [hash]);
+  }, [pathname]);
 
   // Set filename immediately if available from URL
   useEffect(() => {
@@ -433,7 +439,7 @@ export default function PdfViewer() {
         gap: 16
       }}>
         <h2>No PDF Selected</h2>
-        <button onClick={() => window.location.hash = '#/'}>
+        <button onClick={() => navigateTo('/')}>
           ← Back to Dashboard
         </button>
       </div>
@@ -454,7 +460,7 @@ export default function PdfViewer() {
         <p>{error}</p>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => window.location.reload()}>Try Again</button>
-          <button onClick={() => window.location.hash = '#/'}>
+          <button onClick={() => navigateTo('/')}>
             ← Back to Dashboard
           </button>
         </div>

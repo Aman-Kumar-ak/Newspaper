@@ -7,7 +7,7 @@ export function startGoogleLogin() {
 
 // Helper to extract tokens if backend redirected with JSON body (dev workflow)
 export function tryReadTokensFromCallbackPayload() {
-  // Primary: check URL hash tokens=base64
+  // Primary: check URL hash tokens=base64 (OAuth callback)
   try {
     const hash = window.location.hash || '';
     const m = hash.match(/tokens=([^&]+)/);
@@ -21,6 +21,23 @@ export function tryReadTokensFromCallbackPayload() {
       };
     }
   } catch {}
+  
+  // Also check query params for tokens (alternative OAuth callback method)
+  try {
+    const search = window.location.search || '';
+    const params = new URLSearchParams(search);
+    const tokensParam = params.get('tokens');
+    if (tokensParam) {
+      const decoded = JSON.parse(atob(tokensParam.replace(/-/g, '+').replace(/_/g, '/')));
+      return {
+        accessToken: decoded.accessToken || '',
+        refreshToken: decoded.refreshToken || '',
+        username: decoded.username || '',
+        email: decoded.email || '',
+      };
+    }
+  } catch {}
+  
   // Fallback: raw JSON body (when not redirected back)
   try {
     const pre = document.body?.innerText || '';
@@ -40,25 +57,28 @@ export function tryReadTokensFromCallbackPayload() {
 }
 
 export async function logoutGoogle() {
-  // Revoke access token and sign out of Google account, then return to app login
+  // Revoke the app's OAuth access token (this disconnects the app, not the Google account)
   try {
     const { accessToken } = JSON.parse(localStorage.getItem('googleTokens') || '{}');
     if (accessToken) {
-      // Revoke the OAuth access token
+      // Revoke the OAuth access token - this only removes app's access, not Google login
       await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(accessToken)}`, {
         method: 'POST',
         headers: { 'Content-type': 'application/x-www-form-urlencoded' }
       });
     }
+  } catch (err) {
+    console.warn('Failed to revoke token:', err);
+  }
+
+  // Clear local auth state
+  try { 
+    localStorage.removeItem('googleTokens'); 
   } catch {}
 
-  // Clear local auth state before navigating away
-  try { localStorage.removeItem('googleTokens'); } catch {}
-
-  // Force Google Account sign-out so the next login shows the account chooser
-  const returnUrl = `${window.location.origin}/#/login`;
-  const accountsLogout = `https://www.google.com/accounts/Logout?continue=${encodeURIComponent('https://appengine.google.com/_ah/logout?continue=' + encodeURIComponent(returnUrl))}`;
-  window.location.assign(accountsLogout);
+  // Simply navigate to login page - user stays signed in to Google
+  // They will see account picker on next login if they want to switch accounts
+  window.location.href = `${window.location.origin}/login`;
 }
 
 export async function fetchGoogleProfile(accessToken) {

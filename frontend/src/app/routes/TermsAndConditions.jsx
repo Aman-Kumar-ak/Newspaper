@@ -1,7 +1,13 @@
+// Helper function for navigation
+const navigateTo = (path) => {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
 export default function TermsAndConditions() {
   const handleBack = () => {
     const authed = !!(localStorage.getItem('googleTokens'));
-    window.location.hash = authed ? '#/home' : '#/login';
+    navigateTo(authed ? '/home' : '/login');
   };
 
   const ArrowLeft = () => (

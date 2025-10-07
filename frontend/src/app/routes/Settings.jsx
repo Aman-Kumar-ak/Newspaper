@@ -2,20 +2,26 @@ import { useEffect } from 'react';
 import { getTokens, setTokens } from '../../state/authStore';
 import { logoutGoogle } from '../../lib/auth';
 
+// Helper function for navigation
+const navigateTo = (path) => {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
 export default function Settings() {
   const tokens = getTokens();
 
   // If not authenticated, redirect to login
   useEffect(() => {
     if (!tokens.accessToken) {
-      window.location.hash = '#/login';
+      navigateTo('/login');
     }
   }, []);
 
   const handleLogout = async () => {
     await logoutGoogle();
     localStorage.removeItem('googleTokens');
-    window.location.hash = '#/login';
+    navigateTo('/login');
   };
 
   return (
@@ -49,7 +55,7 @@ export default function Settings() {
             Settings
           </h1>
           <button
-            onClick={() => window.location.hash = '#/home'}
+            onClick={() => navigateTo('/home')}
             style={{
               background: '#F3F4F6',
               color: '#374151',
@@ -201,7 +207,7 @@ export default function Settings() {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
-              onClick={() => window.location.hash = '#/privacy-policy'}
+              onClick={() => navigateTo('/privacy-policy')}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -219,7 +225,7 @@ export default function Settings() {
               Privacy Policy
             </button>
             <button
-              onClick={() => window.location.hash = '#/terms-and-conditions'}
+              onClick={() => navigateTo('/terms-and-conditions')}
               style={{
                 background: 'transparent',
                 border: 'none',
