@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { startGoogleLogin, tryReadTokensFromCallbackPayload, logoutGoogle } from '../../lib/auth';
 import { setTokens, getTokens } from '../../state/authStore';
-import { listAllGrouped, uploadWithProgress, deleteFile, getGroupForDate, checkFolderExists } from '../../lib/drive';
+import { listAllGrouped, listAllGroupedProgressive, uploadWithProgress, deleteFile, getGroupForDate, checkFolderExists } from '../../lib/drive';
 import Modal from '../../components/ui/Modal.jsx';
 import UploadTray from '../../components/ui/UploadTray.jsx';
 import Toast from '../../components/ui/Toast.jsx';
@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [toast, setToast] = useState({ visible: false, message: '' });
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Fetching latest files...');
+  const [isLoadingMore, setIsLoadingMore] = useState(false); // For progressive loading indicator
   const [uploadPct, setUploadPct] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('Uploading');
@@ -61,9 +62,17 @@ export default function Dashboard() {
         setTokens({ ...t, ...profile });
       })();
     }
+    
+    // Check if user is authenticated, redirect to login if not
+    const existing = getTokens();
+    if (!existing.accessToken && !t?.accessToken) {
+      console.warn('⚠️ No authentication token found. Redirecting to login...');
+      window.location.hash = '#/login';
+      return;
+    }
+    
     // If already signed in but profile fields are missing, fetch them
     (async () => {
-      const existing = getTokens();
       if (existing.accessToken && (!existing.username || !existing.email)) {
         try {
           const { fetchGoogleProfile } = await import('../../lib/auth');
@@ -74,22 +83,7 @@ export default function Dashboard() {
     })();
     (async () => {
       if (getTokens().accessToken) {
-        setLoadingLabel('Fetching latest files...');
-        setLoading(true);
-        try {
-          // When user hard refreshes the page, fetch latest from Drive (fresh)
-          const g = await listAllGrouped({ fresh: true });
-          setGroups(applyFilter(g, filter));
-          // Set all dates as expanded by default
-          const allDates = new Set(g.map(group => group.date));
-          setExpandedDates(allDates);
-        } catch (error) {
-          console.error('Error loading files:', error);
-          // Check if it's an authentication error
-          if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
-            setSessionExpired(true);
-          }
-        } finally { setLoading(false); }
+        await loadGroupsProgressively(true);
       }
     })();
   }, []);
@@ -152,6 +146,48 @@ export default function Dashboard() {
       });
     }
   }, [openProfile]);
+
+  // Helper function to load groups progressively
+  async function loadGroupsProgressively(fresh = false) {
+    setIsLoadingMore(true);
+    if (fresh) {
+      setLoading(true);
+      setLoadingLabel('Fetching latest files...');
+    }
+    
+    try {
+      const groupsMap = new Map();
+      let loadedCount = 0;
+      
+      for await (const group of listAllGroupedProgressive({ fresh })) {
+        loadedCount++;
+        groupsMap.set(group.date, group);
+        
+        // Convert map to array and update state
+        const currentGroups = Array.from(groupsMap.values());
+        setGroups(applyFilter(currentGroups, filter));
+        
+        // Expand newly loaded dates
+        setExpandedDates(prev => new Set([...prev, group.date]));
+        
+        // Hide full-screen loading after first group loads
+        if (loadedCount === 1 && fresh) {
+          setLoading(false);
+        }
+        
+        // Update loading label to show progress
+        setLoadingLabel(`Loading folders... (${loadedCount} loaded)`);
+      }
+    } catch (error) {
+      console.error('Error loading files:', error);
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        setSessionExpired(true);
+      }
+    } finally { 
+      setLoading(false); 
+      setIsLoadingMore(false);
+    }
+  }
 
     function applyFilter(groupsIn, f, specificDateValue = '') {
     if (f === 'All') return groupsIn;
@@ -732,8 +768,37 @@ export default function Dashboard() {
               ))}
           </div>
         )}
+        
+        {/* Progressive loading indicator */}
+        {isLoadingMore && filteredGroups.length > 0 && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            padding: '32px',
+            fontSize: '14px',
+            color: '#6B7280',
+          }}>
+            <div style={{
+              width: '20px',
+              height: '20px',
+              border: '2px solid #E5E7EB',
+              borderTopColor: '#3B82F6',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+            }} />
+            <span>Loading more folders...</span>
+          </div>
+        )}
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
       {openUpload && (
         <div 

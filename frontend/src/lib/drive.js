@@ -155,6 +155,61 @@ export async function listAllGrouped(opts = {}) {
   return groups;
 }
 
+/**
+ * Progressive loading: yields each group as it becomes available
+ * This allows the UI to show folders incrementally instead of waiting for everything
+ */
+export async function* listAllGroupedProgressive(opts = {}) {
+  const fresh = !!opts.fresh;
+  
+  // If we have cached data and not forcing fresh, yield it immediately
+  if (!fresh) {
+    const cached = await cacheGetGroups();
+    if (cached && cached.length) {
+      for (const group of cached) {
+        yield group;
+      }
+      // Refresh in background for next time
+      refreshGroupsInBackground();
+      return;
+    }
+  }
+  
+  // Fetch dates list
+  const res = await listDates();
+  const dates = (res.dates || []).map(d => d.date);
+  
+  // Sort dates first so we yield in correct order (newest first)
+  const sortedDates = dates.sort((a, b) => {
+    const [ad, am, ay] = a.split('-').map(Number);
+    const [bd, bm, by] = b.split('-').map(Number);
+    const at = new Date(ay, am - 1, ad).getTime();
+    const bt = new Date(by, bm - 1, bd).getTime();
+    return bt - at;
+  });
+  
+  const allGroups = [];
+  
+  // Fetch and yield each folder's files as they become available
+  for (const date of sortedDates) {
+    try {
+      const filesRes = await listByDate(date);
+      const group = { date, files: filesRes.files || [] };
+      allGroups.push(group);
+      yield group; // Yield immediately so UI can update
+    } catch (error) {
+      console.error(`Error loading folder ${date}:`, error);
+      // Yield empty group so UI shows the date even if files failed to load
+      const group = { date, files: [], error: true };
+      allGroups.push(group);
+      yield group;
+    }
+  }
+  
+  // Cache all groups once complete
+  await cacheSetGroups(allGroups);
+}
+
 export async function deleteFile(fileId) {
   const res = await fetch(`${API_BASE}/drive/file/${fileId}`, { method: 'DELETE', headers: authHeaders() });
   return res.json();

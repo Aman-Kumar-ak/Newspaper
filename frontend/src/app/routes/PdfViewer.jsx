@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getFileBytes, updateFileBytes } from '../../lib/drive';
+import { getTokens } from '../../state/authStore';
 import Toast from '../../components/ui/Toast';
 
 // Adobe PDF Embed API key from environment variables
@@ -15,6 +16,16 @@ export default function PdfViewer() {
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [saveStatus, setSaveStatus] = useState('idle'); // idle | saving | saved | error
+  
+  // Check authentication on mount
+  useEffect(() => {
+    const tokens = getTokens();
+    if (!tokens.accessToken) {
+      console.warn('⚠️ No authentication token found. Redirecting to login...');
+      window.location.hash = '#/login';
+      return;
+    }
+  }, []);
   
   useEffect(() => {
     const h = () => setHash(window.location.hash || '#/');
