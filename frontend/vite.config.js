@@ -55,11 +55,11 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: false,
       headers: {
-        // Add CSP headers to allow Adobe services and PDF.js
+        // Add CSP headers to allow Adobe services, PDF.js, and backend API (both production and local)
         'Content-Security-Policy': [
-          "default-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;",
+          "default-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://cloud-newspaper-api.onrender.com http://localhost:8080;",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://documentservices.adobe.com https://dc-api.adobe.io https://unpkg.com https://cdnjs.cloudflare.com;",
-          "connect-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://localhost:8080 http://localhost:8080 https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com;",
+          "connect-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://cloud-newspaper-api.onrender.com http://localhost:8080 https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com;",
           "img-src 'self' data: https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;",
           "style-src 'self' 'unsafe-inline' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
           "font-src 'self' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
