@@ -502,8 +502,49 @@ export default function Dashboard() {
                   cursor: 'pointer',
                   fontSize: '14px',
                   color: '#374151',
-                }}>
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#F3F4F6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
                   Settings
+                </button>
+                <button
+                  onClick={() => {
+                    window.location.hash = '#/privacy';
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 16px',
+                    border: 'none',
+                    background: 'transparent',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: '#374151',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#F3F4F6'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  Privacy Policy
+                </button>
+                <button
+                  onClick={() => {
+                    window.location.hash = '#/terms';
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 16px',
+                    border: 'none',
+                    background: 'transparent',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: '#374151',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#F3F4F6'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  Terms & Conditions
                 </button>
                 <button
                   onClick={async () => {
@@ -523,6 +564,8 @@ export default function Dashboard() {
                     fontSize: '14px',
                     color: '#DC2626',
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#FEE2E2'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
                   Logout
                 </button>
