@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
 
 const authRoutes = require('./routes/auth');
 const driveRoutes = require('./routes/drive');
@@ -58,6 +59,9 @@ if (isProduction) {
 // Body parser
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Cookie parser (for OAuth redirect tracking)
+app.use(cookieParser());
 
 // Custom headers for PDF embedding
 app.use((req, res, next) => {
