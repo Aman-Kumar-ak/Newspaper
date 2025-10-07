@@ -34,7 +34,7 @@ export default function Login() {
       justifyContent: 'center',
     }}>
       {/* Animated Background Images */}
-      <div style={{
+      <div className="background-container" style={{
         position: 'absolute',
         inset: 0,
         zIndex: 0,
@@ -42,6 +42,7 @@ export default function Login() {
         {images.map((img, index) => (
           <div
             key={img}
+            className="background-image"
             style={{
               position: 'absolute',
               inset: 0,
@@ -62,7 +63,7 @@ export default function Login() {
         ))}
         
         {/* Overlay for better text readability */}
-        <div style={{
+        <div className="background-overlay" style={{
           position: 'absolute',
           inset: 0,
           background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%)',
@@ -71,7 +72,7 @@ export default function Login() {
       </div>
 
       {/* Login Card - Centered */}
-      <div style={{
+      <div className="login-card" style={{
         position: 'relative',
         zIndex: 10,
         background: 'rgba(255, 255, 255, 0.95)',
@@ -86,8 +87,8 @@ export default function Login() {
         animation: 'fadeInUp 0.8s ease-out',
       }}>
         {/* Logo/Title Section */}
-        <div style={{ marginBottom: '32px' }}>
-          <div style={{
+        <div className="login-logo-section" style={{ marginBottom: '32px' }}>
+          <div className="login-logo-container" style={{
             width: '80px',
             height: '80px',
             margin: '0 auto 20px',
@@ -110,7 +111,7 @@ export default function Login() {
             />
           </div>
           
-          <h1 style={{ 
+          <h1 className="login-title" style={{ 
             fontSize: '32px',
             fontWeight: '700',
             background: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
@@ -123,7 +124,7 @@ export default function Login() {
             Cloud Newspaper
           </h1>
           
-          <p style={{ 
+          <p className="login-subtitle" style={{ 
             fontSize: '16px',
             color: '#6B7280',
             fontWeight: '500',
@@ -133,12 +134,12 @@ export default function Login() {
           </p>
         </div>
 
-        <div style={{
+        <div className="login-signin-section" style={{
           marginBottom: '24px',
           paddingBottom: '24px',
           borderBottom: '1px solid #E5E7EB',
         }}>
-          <h2 style={{ 
+          <h2 className="login-signin-title" style={{ 
             fontSize: '24px',
             fontWeight: '600',
             color: '#1F2937',
@@ -146,7 +147,7 @@ export default function Login() {
           }}>
             Sign in
           </h2>
-          <p style={{ 
+          <p className="login-signin-desc" style={{ 
             fontSize: '14px',
             color: '#6B7280',
             margin: 0,
@@ -156,6 +157,7 @@ export default function Login() {
         </div>
 
         <button 
+          className="login-google-btn"
           onClick={startGoogleLogin}
           style={{
             width: '100%',
@@ -208,6 +210,92 @@ export default function Login() {
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+        
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+          /* Background adjustments for mobile */
+          .background-image {
+            background-size: cover !important;
+            background-position: center center !important;
+            /* Disable transform animations on mobile for better performance */
+            transform: none !important;
+          }
+          
+          .background-overlay {
+            /* Stronger overlay on mobile for better text contrast */
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.7) 100%) !important;
+          }
+          
+          .login-card {
+            min-width: unset !important;
+            max-width: 95% !important;
+            padding: 32px 24px !important;
+            borderRadius: 20px !important;
+            margin: 16px !important;
+          }
+          
+          .login-logo-section {
+            margin-bottom: 24px !important;
+          }
+          
+          .login-logo-container {
+            width: 64px !important;
+            height: 64px !important;
+            margin: 0 auto 16px !important;
+            border-radius: 16px !important;
+            padding: 10px !important;
+          }
+          
+          .login-title {
+            font-size: 24px !important;
+            margin-bottom: 8px !important;
+          }
+          
+          .login-subtitle {
+            font-size: 14px !important;
+          }
+          
+          .login-signin-section {
+            margin-bottom: 20px !important;
+            padding-bottom: 20px !important;
+          }
+          
+          .login-signin-title {
+            font-size: 20px !important;
+            margin-bottom: 6px !important;
+          }
+          
+          .login-signin-desc {
+            font-size: 13px !important;
+          }
+          
+          .login-google-btn {
+            padding: 12px 20px !important;
+            font-size: 14px !important;
+            border-radius: 10px !important;
+          }
+        }
+        
+        /* Small Mobile Devices */
+        @media (max-width: 375px) {
+          .login-card {
+            padding: 24px 20px !important;
+            margin: 12px !important;
+          }
+          
+          .login-logo-container {
+            width: 56px !important;
+            height: 56px !important;
+          }
+          
+          .login-title {
+            font-size: 22px !important;
+          }
+          
+          .login-signin-title {
+            font-size: 18px !important;
           }
         }
       `}</style>
