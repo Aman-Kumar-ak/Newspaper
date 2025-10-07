@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [specificDate, setSpecificDate] = useState('');
   const [openProfile, setOpenProfile] = useState(false);
   const [openUpload, setOpenUpload] = useState(false);
+  const [openUploadProgress, setOpenUploadProgress] = useState(false);
   const [trayItems, setTrayItems] = useState([]);
   
   // Set current date when upload modal opens
@@ -270,7 +271,7 @@ export default function Dashboard() {
   const filteredGroups = sortByDate(applySearch(applyFilter(groups, filter), search));
 
   return (
-    <div style={{ 
+    <div className="dashboard-container" style={{ 
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
@@ -280,7 +281,7 @@ export default function Dashboard() {
       overflow: 'hidden',
     }}>
       {/* Header */}
-      <div style={{ 
+      <div className="dashboard-header" style={{ 
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
@@ -290,9 +291,56 @@ export default function Dashboard() {
         marginLeft: 0,
         marginRight: '120px',
       }}>
-        {/* Left: Title */}
+        {/* Mobile: Title + Profile Row (hidden on desktop) */}
+        <div className="mobile-title-row" style={{ 
+          display: 'none',
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          width: '100%',
+          marginBottom: '12px'
+        }}>
+          <h1 
+            onClick={() => navigateTo('/home')}
+            style={{
+              fontSize: '1.25rem',
+              fontWeight: 600,
+              color: '#374151',
+              margin: 0,
+              cursor: 'pointer',
+            }}>
+            Digital News Library
+          </h1>
+          
+          {/* Profile Icon for Mobile */}
+          <div style={{ position: 'relative' }}>
+            <button
+              ref={profileBtnRef}
+              className="mobile-profile-button"
+              onClick={() => setOpenProfile(!openProfile)}
+              style={{
+                background: '#B8E6F0',
+                border: 'none',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px',
+                fontWeight: 600,
+                color: '#374151',
+              }}
+            >
+              {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop: Left Title */}
         <h1 
           onClick={() => navigateTo('/home')}
+          className="desktop-title"
           style={{
           fontSize: '1.5rem',
           fontWeight: 600,
@@ -304,8 +352,8 @@ export default function Dashboard() {
         </h1>
 
         {/* Center Group: Search + Filter */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10 }}>
-      <div style={{
+        <div className="search-filter-group" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10 }}>
+      <div className="search-bar" style={{
             position: 'relative',
         display: 'flex',
         alignItems: 'center',
@@ -338,6 +386,7 @@ export default function Dashboard() {
           {/* Filter Button right next to search */}
           <div style={{ display: 'flex', alignItems: 'center' }} ref={dateFilterRef}>
           <button
+            className="filter-button"
             onClick={() => setShowDateFilter(!showDateFilter)}
             style={{
               background: '#B8E6F0',
@@ -359,18 +408,60 @@ export default function Dashboard() {
             </svg>
           </button>
           {showDateFilter && (
-            <div style={{
-              position: 'absolute',
-              top: '76px',
-              transform: 'translateX(-60px)',
-              background: 'white',
-              border: '1px solid #E5E7EB',
-              borderRadius: '8px',
-              padding: '4px 0',
-              minWidth: '110px',
-              zIndex: 9998,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
+            <>
+              {/* Backdrop overlay for mobile */}
+              <div 
+                className="filter-backdrop"
+                onClick={() => setShowDateFilter(false)}
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0, 0, 0, 0.5)',
+                  zIndex: 9997,
+                  display: 'none', // Hidden by default, shown on mobile via CSS
+                }}
+              />
+              
+              <div className="date-filter-dropdown" style={{
+                position: 'absolute',
+                top: '76px',
+                transform: 'translateX(-60px)',
+                background: 'white',
+                border: '1px solid #E5E7EB',
+                borderRadius: '8px',
+                padding: '4px 0',
+                minWidth: '110px',
+                zIndex: 9998,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                {/* Close button for mobile */}
+                <div className="filter-header" style={{ 
+                  display: 'none', 
+                  padding: '12px 16px', 
+                  borderBottom: '1px solid #F3F4F6',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#111827' }}>
+                    Filter
+                  </h3>
+                  <button
+                    onClick={() => setShowDateFilter(false)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      fontSize: '24px',
+                      cursor: 'pointer',
+                      color: '#6B7280',
+                      padding: '0',
+                      lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                
+                <div className="filter-options">
               {['All', 'Today', 'Last 7 days', 'This month'].map((option) => (
                 <button
                   key={option}
@@ -397,7 +488,7 @@ export default function Dashboard() {
                 </button>
               ))}
               <div style={{ borderTop: '1px solid #F3F4F6', margin: '4px 0' }} />
-              <div style={{ padding: '6px 10px' }}>
+              <div className="date-input-container" style={{ padding: '6px 10px' }}>
                 <input
                   type="date"
                   value={specificDate}
@@ -422,16 +513,19 @@ export default function Dashboard() {
                   placeholder="Select date"
                 />
               </div>
+              </div>
             </div>
+            </>
           )}
         </div>
         {/* Close Center Group */}
         </div>
 
         {/* Right: Upload + Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', justifySelf: 'end', transform: 'translateX(var(--profile-right-shift, 0px))' }}>
+        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px', justifySelf: 'end', transform: 'translateX(var(--profile-right-shift, 0px))' }}>
           {/* Upload Button */}
           <button
+            className="upload-button desktop-upload"
             onClick={() => setOpenUpload(true)}
             style={{
               background: '#3B82F6',
@@ -460,6 +554,7 @@ export default function Dashboard() {
           <div style={{ position: 'relative' }}>
             <button
               ref={profileBtnRef}
+              className="profile-button"
               onClick={() => setOpenProfile(!openProfile)}
               style={{
                 background: '#B8E6F0',
@@ -479,33 +574,76 @@ export default function Dashboard() {
               {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
             </button>
             {openProfile && createPortal(
-              <div
-                ref={profileMenuRef}
-                style={{
-                  position: 'fixed',
-                  top: profileMenuPos.top,
-                  left: profileMenuPos.left,
-                  background: 'white',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '12px',
-                  padding: '12px 0',
-                  minWidth: '200px',
-                  zIndex: 10000,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                }}
-              >
-                <div style={{ padding: '0 16px 8px', borderBottom: '1px solid #F3F4F6' }}>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#111827' }}>
-                    {tokens?.username || 'User Name'}
+              <>
+                {/* Backdrop overlay for mobile */}
+                <div 
+                  className="profile-menu-backdrop"
+                  onClick={() => setOpenProfile(false)}
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    zIndex: 9999,
+                    display: 'none', // Hidden by default, shown on mobile via CSS
+                  }}
+                />
+                
+                <div
+                  ref={profileMenuRef}
+                  className="profile-menu"
+                  style={{
+                    position: 'fixed',
+                    top: profileMenuPos.top,
+                    left: profileMenuPos.left,
+                    background: 'white',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '12px',
+                    padding: '12px 0',
+                    minWidth: '200px',
+                    zIndex: 10000,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  }}
+                >
+                  {/* Close button for mobile */}
+                  <div className="profile-menu-header" style={{ 
+                    display: 'none', 
+                    padding: '12px 16px', 
+                    borderBottom: '1px solid #F3F4F6',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#111827' }}>
+                      Profile
+                    </h3>
+                    <button
+                      onClick={() => setOpenProfile(false)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        fontSize: '24px',
+                        cursor: 'pointer',
+                        color: '#6B7280',
+                        padding: '0',
+                        lineHeight: 1,
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#6B7280' }}>
-                    {tokens?.email || 'user@email.com'}
+                  
+                  <div className="profile-info-section" style={{ padding: '0 16px 8px', borderBottom: '1px solid #F3F4F6' }}>
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: '#111827' }}>
+                      {tokens?.username || 'User Name'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                      {tokens?.email || 'user@email.com'}
+                    </div>
                   </div>
-                </div>
                 <button 
                   onClick={() => {
                     navigateTo('/settings');
                   }}
+                  className="profile-menu-item"
                   style={{
                   width: '100%',
                   padding: '8px 16px',
@@ -525,6 +663,7 @@ export default function Dashboard() {
                   onClick={() => {
                     navigateTo('/privacy-policy');
                   }}
+                  className="profile-menu-item"
                   style={{
                     width: '100%',
                     padding: '8px 16px',
@@ -544,6 +683,7 @@ export default function Dashboard() {
                   onClick={() => {
                     navigateTo('/terms-and-conditions');
                   }}
+                  className="profile-menu-item"
                   style={{
                     width: '100%',
                     padding: '8px 16px',
@@ -567,6 +707,7 @@ export default function Dashboard() {
                     localStorage.removeItem('googleTokens');
                     navigateTo('/login');
                   }}
+                  className="profile-menu-item"
                   style={{
                     width: '100%',
                     padding: '8px 16px',
@@ -582,7 +723,8 @@ export default function Dashboard() {
                 >
                   Logout
                 </button>
-              </div>,
+              </div>
+              </>,
               document.body
             )}
           </div>
@@ -590,7 +732,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content Area */}
-      <div style={{ 
+      <div className="main-content" style={{ 
         flex: 1,
         background: '#FFFFFF',
         width: 'calc(100% - 70px)',
@@ -621,11 +763,12 @@ export default function Dashboard() {
               {search ? 'No files found matching your search.' : 'No files yet. Upload your first PDF.'}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="date-groups-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               {filteredGroups.filter(group => group.files && group.files.length > 0).map((group) => (
-                <div key={group.date} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div key={group.date} className="date-group" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {/* Date Header */}
                   <button
+                    className="date-header"
                     onClick={() => toggleDateExpansion(group.date)}
                     style={{
                       display: 'flex',
@@ -658,7 +801,7 @@ export default function Dashboard() {
 
                   {/* Files Grid */}
                   {expandedDates.has(group.date) && (
-                    <div style={{
+                    <div className="files-grid" style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
                       gap: '20px',
@@ -667,6 +810,7 @@ export default function Dashboard() {
                       {group.files.map((file) => (
                         <div
                           key={file.fileId}
+                          className="file-card"
                           onClick={() => {
                             const fileName = encodeURIComponent(file.fileName || 'document.pdf');
                             window.open(`${window.location.origin}/viewer/${file.fileId}?name=${fileName}`, '_blank');
@@ -794,27 +938,6 @@ export default function Dashboard() {
                             }}>
                               {file.fileName || file.name || 'Untitled'}
                             </div>
-                            
-                            {/* File type badge */}
-                            <div style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontSize: '11px',
-                              color: '#DC2626',
-                              fontWeight: 600,
-                              background: '#FEF2F2',
-                              padding: '3px 8px',
-                              borderRadius: '6px',
-                              letterSpacing: '0.02em',
-                            }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                                <path d="M14 2v6h6"/>
-                                <path d="M9 13h6M9 17h6"/>
-                              </svg>
-                              PDF
-                            </div>
                           </div>
                         </div>
                       ))}
@@ -850,14 +973,468 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Floating Mobile Upload Button */}
+      {/* Upload Progress Button - shows when uploads are in progress */}
+      {trayItems.length > 0 && trayItems.some(item => item.status !== 'done') && !deleteConfirm && (
+        <button
+          className="mobile-upload-progress-fab"
+          onClick={() => setOpenUploadProgress(true)}
+          style={{
+            position: 'fixed',
+            bottom: '90px',
+            right: '24px',
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            background: 'white',
+            border: 'none',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            cursor: 'pointer',
+            display: 'none',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            animation: 'scaleIn 0.3s ease',
+          }}
+        >
+          <div style={{ position: 'relative' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            {trayItems.filter(item => item.status !== 'done').length > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: '-8px',
+                right: '-8px',
+                background: '#EF4444',
+                color: 'white',
+                fontSize: '11px',
+                fontWeight: '600',
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                {trayItems.filter(item => item.status !== 'done').length}
+              </span>
+            )}
+          </div>
+        </button>
+      )}
+
+      <button
+        className="mobile-upload-fab"
+        onClick={() => setOpenUpload(true)}
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          background: 'white',
+          border: 'none',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          cursor: 'pointer',
+          display: deleteConfirm ? 'none' : 'none', // Hidden by default on desktop, controlled by deleteConfirm
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          transition: 'transform 0.2s, box-shadow 0.2s',
+          animation: deleteConfirm ? 'none' : 'scaleIn 0.3s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.05)';
+          e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+        }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+        
+        @keyframes slideInRight {
+          from {
+            transform: translateX(100%);
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+        
+        @keyframes slideUpFromBottom {
+          from {
+            transform: translateY(100%);
+          }
+          to {
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes scaleIn {
+          0% {
+            transform: scale(0);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(1.1);
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        
+        /* Hide mobile elements on desktop */
+        .mobile-title-row {
+          display: none !important;
+        }
+        
+        /* Mobile Styles - Apply below 768px */
+        @media (max-width: 768px) {
+          .dashboard-container {
+            background: #E5FBFF !important;
+          }
+          
+          .dashboard-header {
+            display: flex !important;
+            flex-direction: column !important;
+            padding: 16px !important;
+            gap: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            grid-template-columns: unset !important;
+            align-items: stretch !important;
+          }
+          
+          /* Show mobile title row */
+          .mobile-title-row {
+            display: flex !important;
+            order: 1 !important;
+            margin-bottom: 12px !important;
+          }
+          
+          /* Hide desktop title */
+          .desktop-title {
+            display: none !important;
+          }
+          
+          .search-filter-group {
+            order: 2 !important;
+            width: 100% !important;
+            justify-content: space-between !important;
+            gap: 8px !important;
+          }
+          
+          .search-bar {
+            flex: 1 !important;
+            min-width: unset !important;
+            max-width: unset !important;
+            width: auto !important;
+            padding: 10px 12px !important;
+          }
+          
+          .filter-button {
+            flex-shrink: 0 !important;
+          }
+          
+          /* Date Filter Dropdown Mobile Styles */
+          .filter-backdrop {
+            display: block !important;
+            animation: fadeIn 0.3s ease;
+          }
+          
+          .date-filter-dropdown {
+            position: fixed !important;
+            top: auto !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            transform: translateY(0) !important;
+            width: 100% !important;
+            min-width: unset !important;
+            max-width: unset !important;
+            border-radius: 16px 16px 0 0 !important;
+            border: none !important;
+            border-top: 1px solid #E5E7EB !important;
+            padding: 0 !important;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.15) !important;
+            animation: slideUpFromBottom 0.3s ease !important;
+            z-index: 9998 !important;
+          }
+          
+          .filter-header {
+            display: flex !important;
+          }
+          
+          .filter-options {
+            padding: 8px 0 !important;
+            max-height: 60vh !important;
+            overflow-y: auto !important;
+          }
+          
+          .filter-options button {
+            padding: 12px 20px !important;
+            font-size: 15px !important;
+          }
+          
+          .date-input-container {
+            padding: 12px 20px !important;
+          }
+          
+          .date-input-container input[type="date"] {
+            padding: 12px 14px !important;
+            font-size: 15px !important;
+            border-radius: 8px !important;
+            border: 2px solid #E5E7EB !important;
+          }
+          
+          .filter-options > div[style*="padding"] {
+            padding: 12px 20px !important;
+          }
+          
+          .header-actions {
+            display: none !important;
+          }
+          
+          .desktop-upload {
+            display: none !important;
+          }
+          
+          .mobile-upload-fab {
+            display: flex !important;
+          }
+          
+          .mobile-upload-progress-fab {
+            display: flex !important;
+          }
+          
+          /* Profile Menu Mobile Side Drawer */
+          .profile-menu-backdrop {
+            display: block !important;
+            animation: fadeIn 0.3s ease;
+          }
+          
+          .profile-menu {
+            top: 0 !important;
+            left: auto !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 280px !important;
+            max-width: 80vw !important;
+            min-width: unset !important;
+            border-radius: 0 !important;
+            border: none !important;
+            border-left: 1px solid #E5E7EB !important;
+            padding: 0 !important;
+            box-shadow: -4px 0 12px rgba(0,0,0,0.15) !important;
+            animation: slideInRight 0.3s ease !important;
+            overflow-y: auto !important;
+          }
+          
+          .profile-menu-header {
+            display: flex !important;
+          }
+          
+          .profile-info-section {
+            padding: 16px 20px 12px !important;
+          }
+          
+          .profile-menu-item {
+            padding: 14px 20px !important;
+            font-size: 15px !important;
+          }
+          
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          
+          .main-content {
+            width: 100% !important;
+            margin: 0 !important;
+            border-radius: 16px 16px 0 0 !important;
+            border: none !important;
+            border-top: 1px solid #E5E7EB !important;
+          }
+          
+          .main-scroll {
+            padding: 16px !important;
+            padding-top: 16px !important;
+          }
+          
+          .date-groups-container {
+            gap: 8px !important;
+          }
+          
+          .date-group {
+            background: #E5FBFF !important;
+            padding: 12px !important;
+            border-radius: 12px !important;
+            gap: 8px !important;
+          }
+          
+          .date-header {
+            padding: 4px 0 !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
+          }
+          
+          .files-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+            margin-left: 0 !important;
+          }
+          
+          .file-card {
+            border-radius: 12px !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06) !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            padding: 12px !important;
+            gap: 12px !important;
+          }
+          
+          .file-card > div:first-of-type {
+            position: static !important;
+          }
+          
+          .file-card > div:nth-child(2) {
+            width: 80px !important;
+            min-width: 80px !important;
+            height: 80px !important;
+            aspect-ratio: unset !important;
+            border-radius: 8px !important;
+            flex-shrink: 0 !important;
+          }
+          
+          .file-card > div:nth-child(3) {
+            flex: 1 !important;
+            padding: 0 !important;
+            padding-right: 36px !important;
+            background: transparent !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            min-width: 0 !important;
+          }
+          
+          .file-card > div:first-of-type {
+            position: absolute !important;
+            top: 12px !important;
+            right: 12px !important;
+          }
+          
+          /* Upload Modal Mobile Styles */
+          .upload-modal-overlay {
+            align-items: flex-end !important;
+          }
+          
+          .upload-modal-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            border-radius: 16px 16px 0 0 !important;
+            padding: 24px 20px !important;
+            margin: 0 !important;
+          }
+          
+          /* Delete Modal Mobile Styles */
+          .delete-modal-overlay {
+            align-items: flex-end !important;
+          }
+          
+          .delete-modal-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            border-radius: 16px 16px 0 0 !important;
+            padding: 24px 20px 20px !important;
+            margin: 0 !important;
+            animation: slideUpFromBottom 0.3s ease !important;
+          }
+          
+          .delete-modal-content h3 {
+            font-size: 20px !important;
+            margin: 0 0 12px 0 !important;
+          }
+          
+          .delete-modal-content p {
+            font-size: 15px !important;
+            line-height: 1.6 !important;
+            margin: 0 0 24px 0 !important;
+          }
+          
+          .delete-modal-buttons {
+            flex-direction: column !important;
+            gap: 10px !important;
+          }
+          
+          .delete-cancel-btn,
+          .delete-confirm-btn {
+            width: 100% !important;
+            padding: 14px 20px !important;
+            font-size: 16px !important;
+            border-radius: 10px !important;
+          }
+          
+          /* Upload Progress Modal on Mobile */
+          .upload-progress-modal {
+            border-radius: 12px 12px 0 0 !important;
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            max-width: 100% !important;
+            max-height: 70vh !important;
+            margin: 0 !important;
+          }
+          
+          /* Hide UploadTray on mobile, use modal instead */
+          .upload-tray {
+            display: none !important;
+          }
+        }
+        
+        /* Tablet adjustments */
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .dashboard-header {
+            padding: 20px 24px !important;
+            width: calc(100% - 80px) !important;
+            margin-right: 80px !important;
+          }
+          
+          .main-content {
+            width: calc(100% - 40px) !important;
+            margin-right: 80px !important;
+          }
+          
+          .search-bar {
+            min-width: 320px !important;
+          }
+          
+          .files-grid {
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+          }
         }
       `}</style>
 
       {openUpload && (
         <div 
+          className="upload-modal-overlay"
           style={{ 
             position: 'fixed', 
             inset: 0, 
@@ -875,6 +1452,7 @@ export default function Dashboard() {
           }}
         >
           <div 
+            className="upload-modal-content"
             style={{ 
               width: 480, 
               maxWidth: '90%', 
@@ -1086,6 +1664,112 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Upload Progress Modal */}
+      {openUploadProgress && (
+        <div 
+          className="modal-backdrop"
+          onClick={() => setOpenUploadProgress(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div 
+            className="upload-progress-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '500px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              animation: 'slideUpFromBottom 0.3s ease',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#111827' }}>
+                Upload Progress
+              </h2>
+              <button
+                onClick={() => setOpenUploadProgress(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '6px',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#F3F4F6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {trayItems.map((item, idx) => (
+                <div 
+                  key={idx}
+                  style={{
+                    padding: '12px',
+                    background: '#F9FAFB',
+                    borderRadius: '8px',
+                    border: '1px solid #E5E7EB',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.name}
+                    </span>
+                    <span style={{ 
+                      fontSize: '12px', 
+                      fontWeight: '600',
+                      color: item.status === 'done' ? '#10B981' : item.status === 'error' ? '#EF4444' : '#3B82F6',
+                      marginLeft: '8px',
+                    }}>
+                      {item.status === 'done' ? '✓' : item.status === 'error' ? '✗' : `${item.pct}%`}
+                    </span>
+                  </div>
+                  <div style={{
+                    height: '6px',
+                    background: '#E5E7EB',
+                    borderRadius: '3px',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${item.pct}%`,
+                      background: item.status === 'done' ? '#10B981' : item.status === 'error' ? '#EF4444' : '#3B82F6',
+                      transition: 'width 0.3s ease',
+                    }}></div>
+                  </div>
+                  {item.status === 'error' && (
+                    <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#EF4444' }}>
+                      Upload failed
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <UploadTray
         items={trayItems}
         onClose={() => setTrayItems([])}
@@ -1101,6 +1785,7 @@ export default function Dashboard() {
       {/* Delete Confirmation Dialog */}
       {deleteConfirm && (
         <div 
+          className="delete-modal-overlay"
           style={{ 
             position: 'fixed', 
             inset: 0, 
@@ -1113,6 +1798,7 @@ export default function Dashboard() {
           onClick={() => setDeleteConfirm(null)}
         >
           <div 
+            className="delete-modal-content"
             style={{ 
               width: 420, 
               maxWidth: '90%', 
@@ -1139,8 +1825,9 @@ export default function Dashboard() {
               This file <strong style={{ color: '#374151' }}>"{deleteConfirm.fileName}"</strong> will be deleted. This action cannot be undone.
             </p>
             
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <div className="delete-modal-buttons" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
+                className="delete-cancel-btn"
                 onClick={() => setDeleteConfirm(null)}
                 style={{
                   padding: '10px 20px',
@@ -1156,6 +1843,7 @@ export default function Dashboard() {
                 Cancel
               </button>
               <button
+                className="delete-confirm-btn"
                 onClick={async () => {
                   const { fileId, date } = deleteConfirm;
                   setDeleteConfirm(null);

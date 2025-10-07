@@ -16,7 +16,7 @@ export default function UploadTray({ items, onClose, onAllDone }) {
   if (!items || items.length === 0) return null;
 
   return (
-    <div style={{ 
+    <div className="upload-tray" style={{ 
       position: 'fixed', 
       right: 24, 
       bottom: 24, 
@@ -136,6 +136,18 @@ export default function UploadTray({ items, onClose, onAllDone }) {
           </div>
         )}
       </div>
+      
+      <style>{`
+        /* Mobile Styles for Upload Tray */
+        @media (max-width: 768px) {
+          .upload-tray {
+            right: 12px !important;
+            bottom: 12px !important;
+            width: calc(100vw - 24px) !important;
+            max-width: calc(100vw - 24px) !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
