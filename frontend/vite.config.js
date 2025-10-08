@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
@@ -10,11 +11,28 @@ export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production';
   
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      viteStaticCopy({
+        targets: [
+          {
+            src: 'node_modules/pdfjs-dist/build/pdf.worker.min.js',
+            dest: 'assets'
+          }
+        ]
+      })
+    ],
     
     // Optimization
     optimizeDeps: {
       include: ['pdfjs-dist', 'react', 'react-dom', 'zustand', 'idb'],
+      exclude: ['pdfjs-dist/build/pdf.worker.min.js'],
+    },
+    
+    // Worker configuration
+    worker: {
+      format: 'es',
+      plugins: () => [react()]
     },
     
     // Build configuration
@@ -25,6 +43,9 @@ export default defineConfig(({ mode }) => {
       target: 'es2015',
       cssCodeSplit: true,
       rollupOptions: {
+        input: {
+          main: resolve(rootDir, 'index.html'),
+        },
         output: {
           manualChunks: {
             'react-vendor': ['react', 'react-dom'],
@@ -48,25 +69,28 @@ export default defineConfig(({ mode }) => {
       },
       // Chunk size warnings
       chunkSizeWarningLimit: 1000,
+      // Copy public files including service worker
+      copyPublicDir: true,
     },
     
     // Server configuration
     server: {
       port: 5173,
       strictPort: false,
-      headers: {
-        // Add CSP headers to allow Adobe services, PDF.js, and backend API (both production and local)
+      // Remove CSP in development to avoid issues with PDF.js worker
+      headers: isProduction ? {
+        // Only apply CSP in production
         'Content-Security-Policy': [
-          "default-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://cloud-newspaper-api.onrender.com http://localhost:8080;",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://documentservices.adobe.com https://dc-api.adobe.io https://unpkg.com https://cdnjs.cloudflare.com;",
-          "connect-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://cloud-newspaper-api.onrender.com http://localhost:8080 https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com;",
-          "img-src 'self' data: https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;",
+          "default-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://cloud-newspaper-api.onrender.com;",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://documentservices.adobe.com https://dc-api.adobe.io https://cdn.jsdelivr.net;",
+          "connect-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://cloud-newspaper-api.onrender.com https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://cdn.jsdelivr.net;",
+          "img-src 'self' data: blob: https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;",
           "style-src 'self' 'unsafe-inline' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
           "font-src 'self' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
           "frame-src 'self' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
-          "worker-src 'self' blob: https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com https://cdnjs.cloudflare.com;"
+          "worker-src 'self' blob: https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com https://cdn.jsdelivr.net;"
         ].join('; ')
-      }
+      } : {}
     },
     
     // Preview server (for testing production build)

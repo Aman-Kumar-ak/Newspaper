@@ -2,35 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { getTokens } from '../../state/authStore';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set worker path
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
-// Suppress pdf.js warnings and errors in console
-const originalConsoleError = console.error;
-const originalConsoleWarn = console.warn;
-
-console.error = (...args) => {
-  const message = args[0]?.toString() || '';
-  // Filter out pdf.js related errors and warnings
-  if (message.includes('pdf.js') || 
-      message.includes('PdfThumbnail') || 
-      message.includes('Name token') ||
-      message.includes('Thumbnail generation')) {
-    return;
-  }
-  originalConsoleError.apply(console, args);
-};
-
-console.warn = (...args) => {
-  const message = args[0]?.toString() || '';
-  // Filter out pdf.js related warnings
-  if (message.includes('pdf.js') || 
-      message.includes('Name token') ||
-      message.includes('Thumbnail')) {
-    return;
-  }
-  originalConsoleWarn.apply(console, args);
-};
+// Use local worker file for PWA compatibility
+if (typeof window !== 'undefined') {
+  // In development, use relative path that Vite will resolve
+  // In production, use the copied worker file
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/pdf.worker.min.js';
+}
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -129,7 +106,14 @@ export default function PdfThumbnail({ fileId, fileName }) {
           // Silently handle aborted thumbnail generation
           return;
         }
-        // Silently handle errors - don't spam console
+        
+        // Log detailed error for debugging
+        console.error(`❌ PDF Thumbnail Error for ${fileName} (${fileId}):`, {
+          message: err.message,
+          name: err.name,
+          workerSrc: pdfjsLib.GlobalWorkerOptions.workerSrc
+        });
+        
         if (mounted) {
           setError(true);
           setLoading(false);
