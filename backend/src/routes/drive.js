@@ -4,6 +4,9 @@ const router = express.Router();
 const requireAuth = require('../middlewares/requireAuth');
 const upload = multer({ storage: multer.memoryStorage() });
 const { findRootFolder, ensureRootFolder, ensureDateFolder, listFilesByDate, uploadPdf, getFileBytes, updateFileBytes, deleteFile, getChanges, listDateFolders, deleteFolderByDate } = require('../services/driveService');
+
+// In-memory storage for annotations (in production, use a database)
+const annotationsStore = new Map();
 // Delete a folder (by date) from Google Drive
 router.delete('/folder/:date', requireAuth, async (req, res, next) => {
   try {
@@ -91,6 +94,59 @@ router.get('/changes', requireAuth, async (req, res, next) => {
     const { syncToken } = req.query;
     const changes = await getChanges(req.oauthTokens, syncToken);
     res.json(changes);
+  } catch (err) { next(err); }
+});
+
+// Get annotations for a specific file
+router.get('/annotations/:fileId', requireAuth, async (req, res, next) => {
+  try {
+    const { fileId } = req.params;
+    const userEmail = req.oauthTokens.userEmail || 'anonymous';
+    const key = `${userEmail}:${fileId}`;
+    
+    const annotations = annotationsStore.get(key);
+    res.json({ 
+      annotations: annotations || null,
+      fileId,
+      timestamp: annotations ? Date.now() : null
+    });
+  } catch (err) { next(err); }
+});
+
+// Store/update annotations for a specific file
+router.put('/annotations/:fileId', requireAuth, async (req, res, next) => {
+  try {
+    const { fileId } = req.params;
+    const { annotations } = req.body;
+    const userEmail = req.oauthTokens.userEmail || 'anonymous';
+    const key = `${userEmail}:${fileId}`;
+    
+    // Store annotations with timestamp
+    annotationsStore.set(key, {
+      data: annotations,
+      timestamp: Date.now(),
+      userEmail,
+      fileId
+    });
+    
+    console.log(`Stored annotations for ${key}`);
+    res.json({ 
+      success: true, 
+      fileId,
+      timestamp: Date.now()
+    });
+  } catch (err) { next(err); }
+});
+
+// Delete annotations for a specific file
+router.delete('/annotations/:fileId', requireAuth, async (req, res, next) => {
+  try {
+    const { fileId } = req.params;
+    const userEmail = req.oauthTokens.userEmail || 'anonymous';
+    const key = `${userEmail}:${fileId}`;
+    
+    annotationsStore.delete(key);
+    res.json({ success: true, fileId });
   } catch (err) { next(err); }
 });
 

@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { getFileBytes, updateFileBytes } from '../../lib/drive';
 import { getTokens } from '../../state/authStore';
 import Toast from '../../components/ui/Toast';
+import { 
+  getStoredAnnotations, 
+  storeAnnotations, 
+  loadAnnotationsFromServer, 
+  syncAnnotationsToServer,
+  syncAllPendingAnnotations 
+} from '../../lib/annotations';
 
 // Adobe PDF Embed API key from environment variables
 const ADOBE_API_KEY = import.meta.env.VITE_ADOBE_CLIENT_ID;
@@ -195,7 +202,7 @@ export default function PdfViewer() {
     loadFile();
   }, [fileId]);
 
-  const initializeAdobeViewer = (arrayBuffer, fileName) => {
+  const initializeAdobeViewer = async (arrayBuffer, fileName) => {
     if (!adobeViewerRef.current) {
       console.error('Adobe viewer container not found');
       return;
@@ -289,39 +296,53 @@ if (typeof window !== 'undefined') {
     // Load PDF from ArrayBuffer with error handling
     try {
       console.log('Loading PDF in Adobe viewer:', { fileName, fileId, arrayBufferSize: arrayBuffer.byteLength });
-      
+      // Load existing annotations for this file
+      let existingAnnotations = null;
+      try {
+        // First try to load from server (most recent)
+        existingAnnotations = await loadAnnotationsFromServer(fileId);
+        if (!existingAnnotations) {
+          // Fallback to local storage
+          existingAnnotations = getStoredAnnotations(fileId);
+        }
+        console.log('Loaded existing annotations:', existingAnnotations ? 'Found' : 'None');
+      } catch (e) {
+        console.warn('Failed to load annotations:', e);
+      }
       // Create a promise with timeout for large files
       const loadingPromise = adobeDCView.previewFile({
         content: { promise: Promise.resolve(arrayBuffer) },
         metaData: {
           fileName: fileName,
-          id: fileId
+          id: fileId,
+          hasAnnotations: !!existingAnnotations
         }
       }, viewerConfig);
-      
       // Add timeout wrapper
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('PDF loading timeout')), 25000); // 25 second timeout
       });
-      
-      Promise.race([loadingPromise, timeoutPromise])
-        .then(() => {
-          console.log('Adobe PDF viewer loaded successfully');
-          setLoading(false); // Stop loading when PDF is ready
-          
-        }).catch((error) => {
-          console.error('Adobe PDF preview promise error:', error);
-          setLoading(false);
-            if (error.message === 'PDF loading timeout') {
-              setError('PDF is too large and timed out. Please try a smaller file or refresh the page.');
-            } else {
-              setError(`Failed to display PDF: ${error.message || 'Unknown error'}`);
-            }
-        });
-      
+      await Promise.race([loadingPromise, timeoutPromise]);
+      console.log('Adobe PDF viewer loaded successfully');
+      setLoading(false); // Stop loading when PDF is ready
+      // Apply existing annotations if any
+      if (existingAnnotations) {
+        try {
+          const apis = await adobeDCView.getAPIs();
+          await apis.getAnnotationManager().addAnnotations(existingAnnotations);
+          console.log('Applied existing annotations to PDF');
+        } catch (e) {
+          console.warn('Failed to apply existing annotations:', e);
+        }
+      }
     } catch (error) {
       console.error('Adobe PDF preview error:', error);
-      setError('Failed to display PDF. The file may be corrupted or in an unsupported format.');
+      setLoading(false);
+      if (error.message === 'PDF loading timeout') {
+        setError('PDF is too large and timed out. Please try a smaller file or refresh the page.');
+      } else {
+        setError(`Failed to display PDF: ${error.message || 'Unknown error'}`);
+      }
       return;
     }
     
@@ -393,16 +414,27 @@ if (typeof window !== 'undefined') {
             console.log('Annotation changed, auto-saving...');
             setSaveStatus('saving');
             
-            // Get PDF with annotations and save
-            adobeDCView.getAPIs().then(function(apis) {
-              apis.getPDFExportAPIs().getBuffer().then(function(buffer) {
+            // Get current annotations and store them
+            adobeDCView.getAPIs().then(async function(apis) {
+              try {
+                // Get current annotations
+                const currentAnnotations = await apis.getAnnotationManager().getAnnotations();
+                
+                // Store annotations locally and sync to server
+                storeAnnotations(fileId, currentAnnotations);
+                
+                // Also save the PDF with annotations to Google Drive
+                const buffer = await apis.getPDFExportAPIs().getBuffer();
                 console.log('Auto-saving PDF with annotations');
-                saveToGoogleDrive(new Uint8Array(buffer), true); // true for auto-save
-              }).catch(function(error) {
-                console.error('Error getting PDF buffer for auto-save:', error);
+                await saveToGoogleDrive(new Uint8Array(buffer), true); // true for auto-save
+                
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus('idle'), 2000);
+              } catch (error) {
+                console.error('Error in annotation auto-save:', error);
                 setSaveStatus('error');
                 setTimeout(() => setSaveStatus('idle'), 2000);
-              });
+              }
             }).catch(function(error) {
               console.error('Error getting APIs for auto-save:', error);
               setSaveStatus('error');
