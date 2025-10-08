@@ -4,20 +4,20 @@ const { getAuthUrl, handleOAuthCallback } = require('../services/authService');
 
 router.get('/login', async (req, res, next) => {
   try {
-    // Store the origin of the request to redirect back after OAuth
-    const referer = req.get('referer') || req.get('origin') || '';
+    // Prefer referer from query param, then header, then origin
+    let referer = req.query.referer || req.get('referer') || req.get('origin') || '';
     const url = getAuthUrl();
-    
+
     // Save the origin in session or pass as state parameter
     // For simplicity, we'll use a cookie
     if (referer) {
-      res.cookie('oauth_redirect', referer, { 
-        httpOnly: true, 
+      res.cookie('oauth_redirect', referer, {
+        httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 5 * 60 * 1000 // 5 minutes
       });
     }
-    
+
     // If called from a browser, redirect to the Google consent screen directly.
     // You can force redirect with ?redirect=true
     if (req.query.redirect === 'true' || req.accepts(['html', 'json']) === 'html') {

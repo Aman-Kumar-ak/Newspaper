@@ -1,3 +1,10 @@
+// Delete a folder (date group) by date string
+export async function deleteFolderByDate(date) {
+  const url = new URL(`${API_BASE}/drive/folder/${encodeURIComponent(date)}`);
+  const res = await fetch(url, { method: 'DELETE', headers: authHeaders() });
+  if (!res.ok) throw new Error('Failed to delete folder');
+  return res.json();
+}
 import { getTokens } from '../state/authStore';
 import { cacheGetGroups, cacheSetGroups } from './idb';
 

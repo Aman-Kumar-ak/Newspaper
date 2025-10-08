@@ -767,37 +767,69 @@ export default function Dashboard() {
               {filteredGroups.filter(group => group.files && group.files.length > 0).map((group) => (
                 <div key={group.date} className="date-group" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {/* Date Header */}
-                  <button
-                    className="date-header"
-                    onClick={() => toggleDateExpansion(group.date)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      background: 'transparent',
-                      border: 'none',
-                      outline: 'none',
-                      cursor: 'pointer',
-                      padding: '8px 0',
-                      fontSize: '16px',
-                      fontWeight: 500,
-                      color: '#374151',
-                    }}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                    <button
+                      className="date-header"
+                      onClick={() => toggleDateExpansion(group.date)}
                       style={{
-                        transform: expandedDates.has(group.date) ? 'rotate(90deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        cursor: 'pointer',
+                        padding: '8px 0',
+                        fontSize: '16px',
+                        fontWeight: 500,
+                        color: '#374151',
+                        flex: 1,
+                        textAlign: 'left',
                       }}
                     >
-                      <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    {formatDateForDisplay(group.date)}
-                  </button>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        style={{
+                          transform: expandedDates.has(group.date) ? 'rotate(90deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                        }}
+                      >
+                        <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      {formatDateForDisplay(group.date)}
+                    </button>
+                    <button
+                      className="delete-folder-btn"
+                      title="Delete entire folder"
+                      onClick={() => setDeleteConfirm({ folderDate: group.date, folderName: formatDateForDisplay(group.date) })}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#DC2626',
+                        cursor: 'pointer',
+                        padding: '6px',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginLeft: '8px',
+                        fontSize: '16px',
+                        transition: 'background 0.2s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#FEF2F2'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                      </svg>
+                    </button>
+                  </div>
 
                   {/* Files Grid */}
                   {expandedDates.has(group.date) && (
@@ -975,13 +1007,67 @@ export default function Dashboard() {
 
       {/* Floating Mobile Upload Button */}
       {/* Upload Progress Button - shows when uploads are in progress */}
-      {trayItems.length > 0 && trayItems.some(item => item.status !== 'done') && !deleteConfirm && (
+  {trayItems.length > 0 && trayItems.some(item => item.status !== 'done') && !deleteConfirm && !openUpload && (
+    <button
+      className="mobile-upload-progress-fab"
+      onClick={() => setOpenUploadProgress(true)}
+      style={{
+        position: 'fixed',
+        bottom: '90px',
+        right: '24px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        background: 'white',
+        border: 'none',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        cursor: 'pointer',
+        display: deleteConfirm ? 'none' : 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        animation: deleteConfirm ? 'none' : 'scaleIn 0.3s ease',
+      }}
+    >
+      <div style={{ position: 'relative' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        {trayItems.filter(item => item.status !== 'done').length > 0 && (
+          <span style={{
+            position: 'absolute',
+            top: '-8px',
+            right: '-8px',
+            background: '#EF4444',
+            color: 'white',
+            fontSize: '11px',
+            fontWeight: '600',
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            {trayItems.filter(item => item.status !== 'done').length}
+          </span>
+        )}
+      </div>
+    </button>
+  )}
+
+
+      {/* Hide upload button when upload popup is open */}
+      {/* Hide upload button during any modal/popup (upload, delete, upload progress) */}
+      {!(openUpload || deleteConfirm || openUploadProgress) && (
         <button
-          className="mobile-upload-progress-fab"
-          onClick={() => setOpenUploadProgress(true)}
+          className="mobile-upload-fab"
+          onClick={() => setOpenUpload(true)}
           style={{
             position: 'fixed',
-            bottom: '90px',
+            bottom: '24px',
             right: '24px',
             width: '56px',
             height: '56px',
@@ -990,77 +1076,28 @@ export default function Dashboard() {
             border: 'none',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
             cursor: 'pointer',
-            display: 'none',
+            display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1000,
+            transition: 'transform 0.2s, box-shadow 0.2s',
             animation: 'scaleIn 0.3s ease',
           }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+          }}
         >
-          <div style={{ position: 'relative' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="17 8 12 3 7 8"></polyline>
-              <line x1="12" y1="3" x2="12" y2="15"></line>
-            </svg>
-            {trayItems.filter(item => item.status !== 'done').length > 0 && (
-              <span style={{
-                position: 'absolute',
-                top: '-8px',
-                right: '-8px',
-                background: '#EF4444',
-                color: 'white',
-                fontSize: '11px',
-                fontWeight: '600',
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                {trayItems.filter(item => item.status !== 'done').length}
-              </span>
-            )}
-          </div>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
         </button>
       )}
-
-      <button
-        className="mobile-upload-fab"
-        onClick={() => setOpenUpload(true)}
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          width: '56px',
-          height: '56px',
-          borderRadius: '50%',
-          background: 'white',
-          border: 'none',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-          cursor: 'pointer',
-          display: deleteConfirm ? 'none' : 'none', // Hidden by default on desktop, controlled by deleteConfirm
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          transition: 'transform 0.2s, box-shadow 0.2s',
-          animation: deleteConfirm ? 'none' : 'scaleIn 0.3s ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.05)';
-          e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-        }}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </button>
 
       <style>{`
         @keyframes spin {
@@ -1814,7 +1851,7 @@ export default function Dashboard() {
               fontSize: '18px', 
               fontWeight: 600, 
               color: '#111827' 
-            }}>Delete File</h3>
+            }}>{deleteConfirm.folderDate ? 'Delete Folder' : 'Delete File'}</h3>
             
             <p style={{
               margin: '0 0 24px 0',
@@ -1822,7 +1859,9 @@ export default function Dashboard() {
               color: '#6B7280',
               lineHeight: '1.5',
             }}>
-              This file <strong style={{ color: '#374151' }}>"{deleteConfirm.fileName}"</strong> will be deleted. This action cannot be undone.
+              {deleteConfirm.folderDate
+                ? (<span>This folder <strong style={{ color: '#374151' }}>&quot;{deleteConfirm.folderName || deleteConfirm.folderDate}&quot;</strong> and all its files will be deleted. This action cannot be undone.</span>)
+                : (<span>This file <strong style={{ color: '#374151' }}>&quot;{deleteConfirm.fileName}&quot;</strong> will be deleted. This action cannot be undone.</span>)}
             </p>
             
             <div className="delete-modal-buttons" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
@@ -1845,30 +1884,53 @@ export default function Dashboard() {
               <button
                 className="delete-confirm-btn"
                 onClick={async () => {
-                  const { fileId, date } = deleteConfirm;
                   setDeleteConfirm(null);
-                  setLoadingLabel('Deleting file...');
-                  setLoading(true);
-                  try {
-                    await deleteFile(fileId);
-                    const updated = await getGroupForDate(date);
-                    setGroups(prev => {
-                      const others = prev.filter(g => g.date !== updated.date);
-                      return sortByDate(applyFilter([updated, ...others], filter));
-                    });
-                    setToast({ visible: true, message: 'File deleted successfully' });
-                    setTimeout(() => setToast({ visible: false, message: '' }), 3000);
-                  } catch (e) {
-                    console.error('Delete error:', e);
-                    // Check if it's an authentication error
-                    if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('Authentication failed')) {
-                      setSessionExpired(true);
-                    } else {
-                      setToast({ visible: true, message: 'Failed to delete file' });
+                  if (deleteConfirm.folderDate) {
+                    // Folder delete
+                    setLoadingLabel('Deleting folder...');
+                    setLoading(true);
+                    try {
+                      const { deleteFolderByDate } = await import('../../lib/drive');
+                      await deleteFolderByDate(deleteConfirm.folderDate);
+                      setGroups(prev => prev.filter(g => g.date !== deleteConfirm.folderDate));
+                      setToast({ visible: true, message: 'Folder deleted successfully' });
                       setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                    } catch (e) {
+                      console.error('Delete folder error:', e);
+                      if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('Authentication failed')) {
+                        setSessionExpired(true);
+                      } else {
+                        setToast({ visible: true, message: 'Failed to delete folder' });
+                        setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                      }
+                    } finally {
+                      setLoading(false);
                     }
-                  } finally {
-                    setLoading(false);
+                  } else {
+                    // File delete
+                    const { fileId, date } = deleteConfirm;
+                    setLoadingLabel('Deleting file...');
+                    setLoading(true);
+                    try {
+                      await deleteFile(fileId);
+                      const updated = await getGroupForDate(date);
+                      setGroups(prev => {
+                        const others = prev.filter(g => g.date !== updated.date);
+                        return sortByDate(applyFilter([updated, ...others], filter));
+                      });
+                      setToast({ visible: true, message: 'File deleted successfully' });
+                      setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                    } catch (e) {
+                      console.error('Delete error:', e);
+                      if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('Authentication failed')) {
+                        setSessionExpired(true);
+                      } else {
+                        setToast({ visible: true, message: 'Failed to delete file' });
+                        setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                      }
+                    } finally {
+                      setLoading(false);
+                    }
                   }
                 }}
                 style={{

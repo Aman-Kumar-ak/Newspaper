@@ -3,7 +3,15 @@ const multer = require('multer');
 const router = express.Router();
 const requireAuth = require('../middlewares/requireAuth');
 const upload = multer({ storage: multer.memoryStorage() });
-const { findRootFolder, ensureRootFolder, ensureDateFolder, listFilesByDate, uploadPdf, getFileBytes, updateFileBytes, deleteFile, getChanges, listDateFolders } = require('../services/driveService');
+const { findRootFolder, ensureRootFolder, ensureDateFolder, listFilesByDate, uploadPdf, getFileBytes, updateFileBytes, deleteFile, getChanges, listDateFolders, deleteFolderByDate } = require('../services/driveService');
+// Delete a folder (by date) from Google Drive
+router.delete('/folder/:date', requireAuth, async (req, res, next) => {
+  try {
+    const { date } = req.params;
+    const ok = await deleteFolderByDate(req.oauthTokens, date);
+    res.json({ ok });
+  } catch (err) { next(err); }
+});
 
 router.get('/root', requireAuth, async (req, res, next) => {
   try {

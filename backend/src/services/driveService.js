@@ -127,6 +127,23 @@ async function listDateFolders(tokens) {
   return (data.files || []).map(f => ({ folderId: f.id, date: normalizeToDDMMYYYY(f.name) }));
 }
 
-module.exports = { findRootFolder, ensureRootFolder, ensureDateFolder, listFilesByDate, uploadPdf, getFileBytes, updateFileBytes, deleteFile, getChanges, listDateFolders };
+
+// Delete a folder (by date) from Google Drive (move to trash)
+async function deleteFolderByDate(tokens, dateStr) {
+  const normalized = normalizeToDDMMYYYY(dateStr);
+  const rootId = await findRootFolder(tokens);
+  if (!rootId) throw new Error('Root folder not found');
+  const drive = getDrive(tokens);
+  // Find the folder with the given date under the root
+  const q = `mimeType='application/vnd.google-apps.folder' and name='${normalized}' and '${rootId}' in parents and trashed=false`;
+  const { data } = await drive.files.list({ q, fields: 'files(id, name)' });
+  if (!data.files || !data.files.length) throw new Error('Date folder not found');
+  const folderId = data.files[0].id;
+  // Move the folder to trash
+  await drive.files.update({ fileId: folderId, requestBody: { trashed: true } });
+  return true;
+}
+
+module.exports = { findRootFolder, ensureRootFolder, ensureDateFolder, listFilesByDate, uploadPdf, getFileBytes, updateFileBytes, deleteFile, getChanges, listDateFolders, deleteFolderByDate };
 
 
