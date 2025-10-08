@@ -330,6 +330,9 @@ export default function Dashboard() {
                 fontSize: '16px',
                 fontWeight: 600,
                 color: '#374151',
+                outline: 'none',
+                WebkitTapHighlightColor: 'transparent',
+                userSelect: 'none',
               }}
             >
               {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
@@ -399,6 +402,9 @@ export default function Dashboard() {
               placeItems: 'center',
               color: '#0F172A',
               boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+              outline: 'none',
+              WebkitTapHighlightColor: 'transparent',
+              userSelect: 'none',
             }}
             title="Filter"
             aria-label="Open filter options"
@@ -455,6 +461,9 @@ export default function Dashboard() {
                       color: '#6B7280',
                       padding: '0',
                       lineHeight: 1,
+                      outline: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                      userSelect: 'none',
                     }}
                   >
                     ×
@@ -482,6 +491,9 @@ export default function Dashboard() {
                     fontSize: '12px',
                     color: filter === option ? '#3B82F6' : '#374151',
                     fontWeight: filter === option ? 500 : 400,
+                    outline: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                    userSelect: 'none',
                   }}
                 >
                   {option}
@@ -540,6 +552,9 @@ export default function Dashboard() {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
+              outline: 'none',
+              WebkitTapHighlightColor: 'transparent',
+              userSelect: 'none',
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -569,6 +584,9 @@ export default function Dashboard() {
                 fontSize: '16px',
                 fontWeight: 600,
                 color: '#374151',
+                outline: 'none',
+                WebkitTapHighlightColor: 'transparent',
+                userSelect: 'none',
               }}
             >
               {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
@@ -785,6 +803,8 @@ export default function Dashboard() {
                         color: '#374151',
                         flex: 1,
                         textAlign: 'left',
+                        WebkitTapHighlightColor: 'transparent',
+                        userSelect: 'none',
                       }}
                     >
                       <svg
@@ -818,6 +838,9 @@ export default function Dashboard() {
                         marginLeft: '8px',
                         fontSize: '16px',
                         transition: 'background 0.2s',
+                        outline: 'none',
+                        WebkitTapHighlightColor: 'transparent',
+                        userSelect: 'none',
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = '#FEF2F2'}
                       onMouseLeave={e => e.currentTarget.style.background = 'none'}
@@ -877,6 +900,9 @@ export default function Dashboard() {
                                 justifyContent: 'center',
                                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                                 transition: 'all 0.2s ease',
+                                outline: 'none',
+                                WebkitTapHighlightColor: 'transparent',
+                                userSelect: 'none',
                               }}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.background = 'white';
@@ -926,6 +952,9 @@ export default function Dashboard() {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
+                                    outline: 'none',
+                                    WebkitTapHighlightColor: 'transparent',
+                                    userSelect: 'none',
                                   }}
                                   onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
                                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
@@ -1027,6 +1056,9 @@ export default function Dashboard() {
         justifyContent: 'center',
         zIndex: 1000,
         animation: deleteConfirm ? 'none' : 'scaleIn 0.3s ease',
+        outline: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        userSelect: 'none',
       }}
     >
       <div style={{ position: 'relative' }}>
@@ -1082,6 +1114,9 @@ export default function Dashboard() {
             zIndex: 1000,
             transition: 'transform 0.2s, box-shadow 0.2s',
             animation: 'scaleIn 0.3s ease',
+            outline: 'none',
+            WebkitTapHighlightColor: 'transparent',
+            userSelect: 'none',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'scale(1.05)';
@@ -1138,6 +1173,14 @@ export default function Dashboard() {
         
         /* Hide mobile elements on desktop */
         .mobile-title-row {
+          display: none !important;
+        }
+        
+        .mobile-upload-fab {
+          display: none !important;
+        }
+        
+        .mobile-upload-progress-fab {
           display: none !important;
         }
         
@@ -1312,6 +1355,7 @@ export default function Dashboard() {
           .main-scroll {
             padding: 16px !important;
             padding-top: 16px !important;
+            padding-bottom: 80px !important;
           }
           
           .date-groups-container {
@@ -1594,6 +1638,9 @@ export default function Dashboard() {
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
                         marginLeft: '12px',
+                        outline: 'none',
+                        WebkitTapHighlightColor: 'transparent',
+                        userSelect: 'none',
                       }}
                       onClick={(e) => {
                         e.preventDefault();
@@ -1624,6 +1671,9 @@ export default function Dashboard() {
                     fontSize: '14px',
                     fontWeight: 500,
                     cursor: 'pointer',
+                    outline: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                    userSelect: 'none',
                   }}
                 >
                   Cancel
@@ -1691,6 +1741,9 @@ export default function Dashboard() {
                     fontSize: '14px',
                     fontWeight: 500,
                     cursor: (!date || !file) ? 'not-allowed' : 'pointer',
+                    outline: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                    userSelect: 'none',
                   }}
                 >
                   Upload
@@ -1745,6 +1798,9 @@ export default function Dashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  outline: 'none',
+                  WebkitTapHighlightColor: 'transparent',
+                  userSelect: 'none',
                   borderRadius: '6px',
                   transition: 'background 0.2s',
                 }}

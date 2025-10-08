@@ -239,30 +239,52 @@ export default function PdfViewer() {
     // Configure viewer options with maximum annotation support
     const viewerConfig = {
       enableFormFilling: true,
-      enableRedaction: true, // Enable redaction tools
+      enableRedaction: true,
       enablePDFAnalytics: false,
-      enableLeftHandPanel: true, // Show left panel for tools
-      enableRightHandPanel: false, // Show right panel for annotations
+      enableLeftHandPanel: true,
+      enableRightHandPanel: false,
       enableSearchAPIs: true,
       enableLinearization: false,
-      enableAnnotationAPIs: true, // Enable annotations
-      includePDFAnnotations: true, // Include existing annotations
-      showDownloadPDF: true, // Show download option
-      showPrintPDF: true, // Show print option
-      showAnnotationTools: true, // Show annotation toolbar
+      enableAnnotationAPIs: true,
+      includePDFAnnotations: true,
+      showDownloadPDF: true,
+      showPrintPDF: true,
+      showAnnotationTools: true,
       showSharePDF: false,
-      embedMode: "FULL_WINDOW", // Use full window for all tools
-      defaultViewMode: isMobile ? "FIT_PAGE" : "FIT_WIDTH", // Better mobile view
-      showBookmarks: false, // Show bookmarks panel
-      showThumbnails: !isMobile, // Hide thumbnails on mobile to save space
-      exitPDFViewerType: "RETURN", // Return to same page when exiting
-      showFullScreen: true, // Enable fullscreen option
-      showZoomControl: true, // Show zoom controls
-      enableFormFillAPI: false, // Enable form filling API
-      enableCommentAPI: true, // Enable comment API
-      showCommentTools: true, // Show comment tools
-      dockPageControls: isMobile, // Dock page controls on mobile for better access
+      embedMode: "FULL_WINDOW",
+      defaultViewMode: isMobile ? "FIT_PAGE" : "FIT_WIDTH",
+      showBookmarks: false,
+      showThumbnails: !isMobile,
+      exitPDFViewerType: "RETURN",
+      showFullScreen: true,
+      showZoomControl: true,
+      enableFormFillAPI: false,
+      enableCommentAPI: true,
+      showCommentTools: true,
+      dockPageControls: true, // Always dock page controls for mobile accessibility
+      enableAnnotationsInMobile: true, // Force annotation tools on mobile
+      showHighlightTools: true,
+      showDrawingTools: true,
+      showCommentingTools: true,
+      // Extra: try to force toolbar always visible
+      toolbarSticky: true
     };
+// CSS tweak: ensure Adobe toolbar is always visible on mobile
+if (typeof window !== 'undefined') {
+  const style = document.createElement('style');
+  style.innerHTML = `
+    @media (max-width: 768px) {
+      #adobe-pdf-viewer .sdk-toolbar {
+        display: flex !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 1000 !important;
+        background: #fff !important;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
     
     // Load PDF from ArrayBuffer with error handling
     try {
@@ -509,108 +531,7 @@ export default function PdfViewer() {
         }}
       />
 
-      {/* Floating Save Button for Mobile */}
-      {isMobile && (
-        <button
-          onClick={async () => {
-            if (isSaving || !adobeViewerRef.current) return;
-            
-            try {
-              setSaveStatus('saving');
-              setIsSaving(true);
-              
-              // Get the PDF with annotations using Adobe API
-              const adobeDCView = adobeViewerRef.current.adobeDCView;
-              if (!adobeDCView) {
-                throw new Error('Adobe viewer not initialized');
-              }
-              
-              // Get PDF buffer with annotations
-              const result = await adobeDCView.getAPIs().then(apis => {
-                return apis.getPDFData();
-              });
-              
-              const buffer = await result;
-              await saveToGoogleDrive(new Uint8Array(buffer));
-              
-            } catch (error) {
-              console.error('Manual save error:', error);
-              setToast({
-                message: 'Failed to save changes',
-                type: 'error',
-              });
-              setSaveStatus('error');
-              setTimeout(() => setSaveStatus('idle'), 2000);
-            }
-          }}
-          disabled={isSaving}
-          className="mobile-save-button"
-          style={{
-            position: 'fixed',
-            bottom: '80px',
-            right: '20px',
-            width: '56px',
-            height: '56px',
-            borderRadius: '50%',
-            background: saveStatus === 'saving' ? '#9CA3AF' : saveStatus === 'saved' ? '#10B981' : '#DC2626',
-            border: 'none',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1)',
-            cursor: isSaving ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-            transition: 'all 0.3s ease',
-            animation: saveStatus === 'saving' ? 'pulse 2s ease-in-out infinite' : 'none',
-          }}
-        >
-          {saveStatus === 'saving' ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-            </svg>
-          ) : saveStatus === 'saved' ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-              <polyline points="17 21 17 13 7 13 7 21"></polyline>
-              <polyline points="7 3 7 8 15 8"></polyline>
-            </svg>
-          )}
-        </button>
-      )}
 
-      {/* Back Button for Mobile */}
-      {isMobile && (
-        <button
-          onClick={() => navigateTo('/')}
-          className="mobile-back-button"
-          style={{
-            position: 'fixed',
-            top: '20px',
-            left: '20px',
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.95)',
-            border: '1px solid #E5E7EB',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-            transition: 'all 0.2s ease',
-          }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
-        </button>
-      )}
 
       {/* Save status pill removed per request */}
       

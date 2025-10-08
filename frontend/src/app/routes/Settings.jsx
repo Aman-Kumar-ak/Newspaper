@@ -25,13 +25,14 @@ export default function Settings() {
   };
 
   return (
-    <div style={{
+    <div className="settings-container" style={{
       minHeight: '100vh',
       background: '#F9FAFB',
       fontFamily: 'system-ui, -apple-system, sans-serif',
+      overflowY: 'auto',
     }}>
       {/* Header */}
-      <header style={{
+      <header className="settings-header" style={{
         background: 'white',
         borderBottom: '1px solid #E5E7EB',
         padding: '16px 24px',
@@ -82,13 +83,15 @@ export default function Settings() {
       </header>
 
       {/* Main Content */}
-      <main style={{
+      <main className="settings-main" style={{
         maxWidth: '1200px',
         margin: '0 auto',
         padding: '32px 24px',
+        paddingBottom: '80px',
+        overflowY: 'auto',
       }}>
         {/* Account Section */}
-        <section style={{
+        <section className="settings-section" style={{
           background: 'white',
           borderRadius: '12px',
           padding: '24px',
@@ -107,7 +110,7 @@ export default function Settings() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Profile Picture */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
+              <div className="profile-avatar" style={{
                 width: '64px',
                 height: '64px',
                 borderRadius: '50%',
@@ -122,7 +125,7 @@ export default function Settings() {
                 {tokens?.username ? tokens.username[0].toUpperCase() : 'U'}
               </div>
               <div>
-                <div style={{
+                <div className="profile-name" style={{
                   fontSize: '16px',
                   fontWeight: 600,
                   color: '#111827',
@@ -130,7 +133,7 @@ export default function Settings() {
                 }}>
                   {tokens?.username || 'User Name'}
                 </div>
-                <div style={{
+                <div className="profile-email" style={{
                   fontSize: '14px',
                   color: '#6B7280',
                 }}>
@@ -142,7 +145,7 @@ export default function Settings() {
         </section>
 
         {/* Preferences Section */}
-        <section style={{
+        <section className="settings-section" style={{
           background: 'white',
           borderRadius: '12px',
           padding: '24px',
@@ -189,7 +192,7 @@ export default function Settings() {
         </section>
 
         {/* Legal Section */}
-        <section style={{
+        <section className="settings-section" style={{
           background: 'white',
           borderRadius: '12px',
           padding: '24px',
@@ -246,7 +249,7 @@ export default function Settings() {
         </section>
 
         {/* Danger Zone */}
-        <section style={{
+        <section className="settings-section" style={{
           background: 'white',
           borderRadius: '12px',
           padding: '24px',
@@ -261,7 +264,7 @@ export default function Settings() {
           }}>
             Danger Zone
           </h2>
-          <p style={{
+          <p className="danger-zone-text" style={{
             fontSize: '14px',
             color: '#6B7280',
             marginBottom: '16px',
@@ -270,6 +273,7 @@ export default function Settings() {
           </p>
           
           <button
+            className="logout-button"
             onClick={handleLogout}
             style={{
               background: '#DC2626',
@@ -289,6 +293,85 @@ export default function Settings() {
           </button>
         </section>
       </main>
+
+      <style>{`
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+          body {
+            overflow-x: hidden;
+          }
+          
+          .settings-container {
+            background: #E5FBFF !important;
+          }
+          
+          .settings-header {
+            padding: 16px !important;
+          }
+          
+          .settings-header h1 {
+            font-size: 18px !important;
+          }
+          
+          .settings-main {
+            padding: 16px !important;
+            padding-bottom: 120px !important;
+          }
+          
+          .settings-section {
+            padding: 20px !important;
+            margin-bottom: 16px !important;
+            border-radius: 12px !important;
+          }
+          
+          .settings-section h2 {
+            font-size: 16px !important;
+            margin-bottom: 16px !important;
+          }
+          
+          .profile-avatar {
+            width: 56px !important;
+            height: 56px !important;
+            font-size: 24px !important;
+          }
+          
+          .profile-name {
+            font-size: 15px !important;
+          }
+          
+          .profile-email {
+            font-size: 13px !important;
+          }
+          
+          .preference-item {
+            padding: 16px 0 !important;
+          }
+          
+          .preference-title {
+            font-size: 15px !important;
+          }
+          
+          .preference-subtitle {
+            font-size: 13px !important;
+          }
+          
+          .legal-button {
+            padding: 16px !important;
+            font-size: 15px !important;
+          }
+          
+          .logout-button {
+            padding: 14px 24px !important;
+            font-size: 15px !important;
+            width: 100% !important;
+          }
+          
+          .danger-zone-text {
+            font-size: 13px !important;
+            margin-bottom: 20px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
