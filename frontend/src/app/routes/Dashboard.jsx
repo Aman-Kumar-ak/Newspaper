@@ -13,6 +13,7 @@ import UploadTray from '../../components/ui/UploadTray.jsx';
 import Toast from '../../components/ui/Toast.jsx';
 import LoadingOverlay from '../../components/ui/LoadingOverlay.jsx';
 import PdfThumbnail from '../../components/pdf/PdfThumbnail.jsx';
+import ThumbnailPreloader from '../../components/pdf/ThumbnailPreloader.jsx';
 import { useDriveCache } from '../../hooks/DriveCacheContext';
 // Importing useDriveCache from the correct path
 // The file extension .jsx is not necessary when importing modules in JavaScript
@@ -1161,6 +1162,9 @@ export default function Dashboard() {
         )}
         </div>
       </div>
+
+      {/* Preload thumbnails for all files (invisible) */}
+      <ThumbnailPreloader groups={safeGroups} />
 
       {/* Floating Mobile Upload Button */}
       {/* Upload Progress Button - shows when uploads are in progress */}

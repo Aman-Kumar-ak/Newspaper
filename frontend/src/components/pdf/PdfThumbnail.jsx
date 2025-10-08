@@ -11,7 +11,39 @@ if (typeof window !== 'undefined') {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-// In-memory cache for thumbnails
+// Persistent cache for thumbnails using localStorage
+const CACHE_KEY = 'pdf-thumbnails-cache';
+const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Get cached thumbnail from localStorage
+function getCachedThumbnail(fileId) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    const item = cache[fileId];
+    if (item && (Date.now() - item.timestamp) < CACHE_EXPIRY) {
+      return item.dataUrl;
+    }
+  } catch (e) {
+    console.warn('Error reading thumbnail cache:', e);
+  }
+  return null;
+}
+
+// Save thumbnail to localStorage
+function setCachedThumbnail(fileId, dataUrl) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    cache[fileId] = {
+      dataUrl,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch (e) {
+    console.warn('Error saving thumbnail cache:', e);
+  }
+}
+
+// In-memory cache for thumbnails (for current session)
 const thumbnailCache = new Map();
 
 function authHeaders() {
@@ -35,9 +67,18 @@ export default function PdfThumbnail({ fileId, fileName }) {
 
     async function generateThumbnail() {
       try {
-        // Check cache first
+        // Check in-memory cache first
         if (thumbnailCache.has(fileId)) {
           setThumbnail(thumbnailCache.get(fileId));
+          setLoading(false);
+          return;
+        }
+
+        // Check localStorage cache
+        const cachedThumbnail = getCachedThumbnail(fileId);
+        if (cachedThumbnail) {
+          thumbnailCache.set(fileId, cachedThumbnail);
+          setThumbnail(cachedThumbnail);
           setLoading(false);
           return;
         }
@@ -93,8 +134,9 @@ export default function PdfThumbnail({ fileId, fileName }) {
         // Convert canvas to data URL with lower quality for speed
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         
-        // Cache the thumbnail
+        // Cache the thumbnail in both memory and localStorage
         thumbnailCache.set(fileId, dataUrl);
+        setCachedThumbnail(fileId, dataUrl);
         
         setThumbnail(dataUrl);
         setLoading(false);
@@ -151,7 +193,7 @@ export default function PdfThumbnail({ fileId, fileName }) {
           width: '100%',
           height: '100%',
           background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
-          animation: 'shimmer 1.5s infinite',
+          animation: 'shimmer 2s infinite',
         }} />
         <div style={{
           width: '24px',
@@ -159,7 +201,7 @@ export default function PdfThumbnail({ fileId, fileName }) {
           border: '3px solid #E5E7EB',
           borderTopColor: '#3B82F6',
           borderRadius: '50%',
-          animation: 'spin 0.6s linear infinite',
+          animation: 'spin 1s linear infinite',
         }} />
         <style>
           {`
