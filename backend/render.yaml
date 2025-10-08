@@ -1,7 +1,13 @@
-# Render build configuration
-build:
-  runtime: node
-  command: npm install
-  
-start:
-  command: npm start
+# Render deployment configuration for Cloud Newspaper API
+services:
+  - type: web
+    name: cloud-newspaper-api
+    env: node
+    buildCommand: npm install
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080

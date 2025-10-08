@@ -90,13 +90,30 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
+// Health check endpoint for Uptime Robot monitoring
 app.get('/health', (req, res) => {
-  res.json({ 
+  res.status(200).json({ 
     ok: true, 
+    status: 'healthy',
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    version: process.version
+  });
+});
+
+// Simple ping endpoint for monitoring services
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
+// Alternative health check endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    message: 'Cloud Newspaper API is running',
+    status: 'healthy',
+    timestamp: new Date().toISOString()
   });
 });
 
