@@ -2,10 +2,13 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import { DriveCacheProvider } from './hooks/DriveCacheContext';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <DriveCacheProvider>
+      <App />
+    </DriveCacheProvider>
   </StrictMode>,
 )
 

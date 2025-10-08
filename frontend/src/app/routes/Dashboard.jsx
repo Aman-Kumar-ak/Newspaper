@@ -1,13 +1,21 @@
+// ...existing imports...
+
+// Always expand the top (most recent) date group
+// (This must be placed after imports and inside the Dashboard component)
+
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { startGoogleLogin, tryReadTokensFromCallbackPayload, logoutGoogle } from '../../lib/auth';
 import { setTokens, getTokens } from '../../state/authStore';
-import { listAllGrouped, listAllGroupedProgressive, uploadWithProgress, deleteFile, getGroupForDate, checkFolderExists } from '../../lib/drive';
+import { listAllGrouped, listAllGroupedProgressive, uploadWithProgress, deleteFile, deleteFolderByDate, getGroupForDate, checkFolderExists } from '../../lib/drive';
 import Modal from '../../components/ui/Modal.jsx';
 import UploadTray from '../../components/ui/UploadTray.jsx';
 import Toast from '../../components/ui/Toast.jsx';
 import LoadingOverlay from '../../components/ui/LoadingOverlay.jsx';
 import PdfThumbnail from '../../components/pdf/PdfThumbnail.jsx';
+import { useDriveCache } from '../../hooks/DriveCacheContext';
+// Importing useDriveCache from the correct path
+// The file extension .jsx is not necessary when importing modules in JavaScript
 
 // Helper function for navigation
 const navigateTo = (path) => {
@@ -16,10 +24,11 @@ const navigateTo = (path) => {
 };
 
 export default function Dashboard() {
+  const { groups: cachedGroups, setGroups: setCacheGroups, loading: cacheLoading, fetchDrive, invalidate } = useDriveCache();
+  const [groups, setGroups] = useState([]); // Local filtered view
   const [date, setDate] = useState(''); // DD-MM-YYYY for backend
   const [dateISO, setDateISO] = useState(''); // YYYY-MM-DD for <input type="date">
   const [file, setFile] = useState(null);
-  const [groups, setGroups] = useState([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [specificDate, setSpecificDate] = useState('');
@@ -47,7 +56,18 @@ export default function Dashboard() {
   const [uploadPct, setUploadPct] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('Uploading');
-  const [expandedDates, setExpandedDates] = useState(new Set());
+  // Persistent expandedDates: restore from sessionStorage, else empty
+  const [expandedDates, setExpandedDates] = useState(() => {
+    const saved = sessionStorage.getItem('expandedDates');
+    if (saved) {
+      try {
+        return new Set(JSON.parse(saved));
+      } catch {
+        return new Set();
+      }
+    }
+    return new Set();
+  });
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [openMenuFileId, setOpenMenuFileId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { fileId, fileName }
@@ -69,7 +89,7 @@ export default function Dashboard() {
         setTokens({ ...t, ...profile });
       })();
     }
-    
+
     // Check if user is authenticated, redirect to login if not
     const existing = getTokens();
     if (!existing.accessToken && !t?.accessToken) {
@@ -77,7 +97,7 @@ export default function Dashboard() {
       navigateTo('/login');
       return;
     }
-    
+
     // If already signed in but profile fields are missing, fetch them
     (async () => {
       if (existing.accessToken && (!existing.username || !existing.email)) {
@@ -88,12 +108,20 @@ export default function Dashboard() {
         } catch {}
       }
     })();
-    (async () => {
-      if (getTokens().accessToken) {
-        await loadGroupsProgressively(true);
-      }
-    })();
-  }, []);
+
+    // Only fetch if cache is empty/null, otherwise use cachedGroups
+    if (cachedGroups && Array.isArray(cachedGroups)) {
+      setGroups(cachedGroups);
+    } else {
+      (async () => {
+        if (getTokens().accessToken) {
+          const data = await fetchDrive();
+          setGroups(data);
+        }
+      })();
+    }
+    // eslint-disable-next-line
+  }, [cachedGroups]);
 
   // Always get latest tokens for profile info
   const tokens = getTokens();
@@ -245,9 +273,14 @@ export default function Dashboard() {
       } else {
         newSet.add(date);
       }
+      // Persist to sessionStorage
+      sessionStorage.setItem('expandedDates', JSON.stringify(Array.from(newSet)));
       return newSet;
     });
   }
+
+
+
 
   function formatDateForDisplay(dateStr) {
     const [d, m, y] = dateStr.split('-').map(Number);
@@ -269,6 +302,31 @@ export default function Dashboard() {
   }
 
   const filteredGroups = sortByDate(applySearch(applyFilter(groups, filter), search));
+
+  // On first mount, expand the top group if none are expanded (first visit only)
+  useEffect(() => {
+    if (filteredGroups.length > 0 && expandedDates.size === 0) {
+      const topDate = filteredGroups[0].date;
+      const newSet = new Set([topDate]);
+      setExpandedDates(newSet);
+      sessionStorage.setItem('expandedDates', JSON.stringify([topDate]));
+    }
+  }, [filteredGroups]);
+
+  // On mount, restore expandedDates from sessionStorage (if user navigates back)
+  useEffect(() => {
+    const saved = sessionStorage.getItem('expandedDates');
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) {
+          setExpandedDates(new Set(arr));
+        }
+      } catch {}
+    }
+    // Only runs on mount
+    // eslint-disable-next-line
+  }, []);
 
   return (
     <div className="dashboard-container" style={{ 
@@ -521,6 +579,10 @@ export default function Dashboard() {
                     fontSize: '11px',
                     color: '#374151',
                     cursor: 'pointer',
+                    background: '#FFFFFF',
+                    colorScheme: 'light',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'textfield',
                   }}
                   placeholder="Select date"
                 />
@@ -1281,6 +1343,9 @@ export default function Dashboard() {
             font-size: 15px !important;
             border-radius: 8px !important;
             border: 2px solid #E5E7EB !important;
+            background: #FFFFFF !important;
+            color: #374151 !important;
+            color-scheme: light !important;
           }
           
           .filter-options > div[style*="padding"] {
@@ -1511,6 +1576,59 @@ export default function Dashboard() {
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
           }
         }
+
+        /* Date Input Styling - Force Light Theme */
+        input[type="date"] {
+          color-scheme: light !important;
+          background: #FFFFFF !important;
+          color: #374151 !important;
+        }
+        
+        input[type="date"]::-webkit-calendar-picker-indicator {
+          background: none !important;
+          color: #374151 !important;
+          cursor: pointer !important;
+          filter: none !important;
+        }
+        
+        input[type="date"]::-webkit-datetime-edit {
+          color: #374151 !important;
+        }
+        
+        input[type="date"]::-webkit-datetime-edit-text {
+          color: #6B7280 !important;
+        }
+        
+        input[type="date"]::-webkit-datetime-edit-month-field,
+        input[type="date"]::-webkit-datetime-edit-day-field,
+        input[type="date"]::-webkit-datetime-edit-year-field {
+          color: #374151 !important;
+        }
+        
+        /* Override system dark mode for date inputs */
+        @media (prefers-color-scheme: dark) {
+          input[type="date"] {
+            color-scheme: light !important;
+            background: #FFFFFF !important;
+            color: #374151 !important;
+          }
+          
+          input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: none !important;
+            color: #374151 !important;
+          }
+          
+          input[type="date"]::-webkit-datetime-edit,
+          input[type="date"]::-webkit-datetime-edit-month-field,
+          input[type="date"]::-webkit-datetime-edit-day-field,
+          input[type="date"]::-webkit-datetime-edit-year-field {
+            color: #374151 !important;
+          }
+          
+          input[type="date"]::-webkit-datetime-edit-text {
+            color: #6B7280 !important;
+          }
+        }
       `}</style>
 
       {openUpload && (
@@ -1577,6 +1695,8 @@ export default function Dashboard() {
                     borderRadius: '8px',
                     fontSize: '14px',
                     color: '#374151',
+                    background: '#FFFFFF',
+                    colorScheme: 'light',
                     outline: 'none',
                   }}
                 />
@@ -1946,9 +2066,10 @@ export default function Dashboard() {
                     setLoadingLabel('Deleting folder...');
                     setLoading(true);
                     try {
-                      const { deleteFolderByDate } = await import('../../lib/drive');
                       await deleteFolderByDate(deleteConfirm.folderDate);
-                      setGroups(prev => prev.filter(g => g.date !== deleteConfirm.folderDate));
+                      invalidate();
+                      const all = await fetchDrive({ fresh: true });
+                      setGroups(all);
                       setToast({ visible: true, message: 'Folder deleted successfully' });
                       setTimeout(() => setToast({ visible: false, message: '' }), 3000);
                     } catch (e) {
@@ -1964,16 +2085,14 @@ export default function Dashboard() {
                     }
                   } else {
                     // File delete
-                    const { fileId, date } = deleteConfirm;
+                    const { fileId } = deleteConfirm;
                     setLoadingLabel('Deleting file...');
                     setLoading(true);
                     try {
                       await deleteFile(fileId);
-                      const updated = await getGroupForDate(date);
-                      setGroups(prev => {
-                        const others = prev.filter(g => g.date !== updated.date);
-                        return sortByDate(applyFilter([updated, ...others], filter));
-                      });
+                      invalidate();
+                      const all = await fetchDrive({ fresh: true });
+                      setGroups(all);
                       setToast({ visible: true, message: 'File deleted successfully' });
                       setTimeout(() => setToast({ visible: false, message: '' }), 3000);
                     } catch (e) {

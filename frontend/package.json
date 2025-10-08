@@ -12,7 +12,7 @@
   "dependencies": {
     "@react-oauth/google": "^0.12.2",
     "idb": "^8.0.3",
-    "pdfjs-dist": "^3.11.174",
+    "pdfjs-dist": "^5.4.296",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "zustand": "^5.0.8"
