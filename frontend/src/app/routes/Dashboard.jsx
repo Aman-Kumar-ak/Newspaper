@@ -25,7 +25,8 @@ const navigateTo = (path) => {
 
 export default function Dashboard() {
   const { groups: cachedGroups, setGroups: setCacheGroups, loading: cacheLoading, fetchDrive, invalidate } = useDriveCache();
-  const [groups, setGroups] = useState([]); // Local filtered view
+  // groups: null = not loaded, [] = loaded but empty, [..] = loaded
+  const [groups, setGroups] = useState(null); // null = not loaded, [] = loaded but empty
   const [date, setDate] = useState(''); // DD-MM-YYYY for backend
   const [dateISO, setDateISO] = useState(''); // YYYY-MM-DD for <input type="date">
   const [file, setFile] = useState(null);
@@ -38,6 +39,9 @@ export default function Dashboard() {
   const [trayItems, setTrayItems] = useState([]);
   
   // Set current date when upload modal opens
+  // Error state for API/data loading
+  const [fatalError, setFatalError] = useState(null);
+
   useEffect(() => {
     if (openUpload && !dateISO) {
       const today = new Date();
@@ -50,8 +54,8 @@ export default function Dashboard() {
     }
   }, [openUpload]);
   const [toast, setToast] = useState({ visible: false, message: '' });
-  const [loading, setLoading] = useState(false);
-  const [loadingLabel, setLoadingLabel] = useState('Fetching latest files...');
+  const [loading, setLoading] = useState(true); // Start as true for initial load
+  const [loadingLabel, setLoadingLabel] = useState('Loading your files...');
   const [isLoadingMore, setIsLoadingMore] = useState(false); // For progressive loading indicator
   const [uploadPct, setUploadPct] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -109,16 +113,44 @@ export default function Dashboard() {
       }
     })();
 
-    // Only fetch if cache is empty/null, otherwise use cachedGroups
-    if (cachedGroups && Array.isArray(cachedGroups)) {
-      setGroups(cachedGroups);
-    } else {
-      (async () => {
-        if (getTokens().accessToken) {
-          const data = await fetchDrive();
-          setGroups(data);
-        }
-      })();
+    // Optimized: fetch only the top date group first, then load the rest in background
+    // If nothing loaded yet, show loading until we have cache or fresh data
+    if (groups === null) {
+      if (cachedGroups && Array.isArray(cachedGroups)) {
+        setGroups(cachedGroups);
+        setLoading(false);
+        // Start background refresh for latest data
+        (async () => {
+          try {
+            setLoadingLabel('Checking for new files...');
+            const allGroups = await fetchDrive({ fresh: true });
+            if (Array.isArray(allGroups)) {
+              setGroups(allGroups);
+            }
+          } catch (e) {
+            // Only show error if no cache
+            if (!cachedGroups || !cachedGroups.length) {
+              setFatalError('Failed to load your files. Please check your connection or try again.');
+            }
+          } finally {
+            setLoading(false);
+          }
+        })();
+      } else {
+        // No cache, fetch fresh
+        (async () => {
+          try {
+            setLoading(true);
+            setLoadingLabel('Loading your files...');
+            const allGroups = await fetchDrive({ fresh: true });
+            setGroups(Array.isArray(allGroups) ? allGroups : []);
+          } catch (e) {
+            setFatalError('Failed to load your files. Please check your connection or try again.');
+          } finally {
+            setLoading(false);
+          }
+        })();
+      }
     }
     // eslint-disable-next-line
   }, [cachedGroups]);
@@ -301,7 +333,9 @@ export default function Dashboard() {
     );
   }
 
-  const filteredGroups = sortByDate(applySearch(applyFilter(groups, filter), search));
+  // Always ensure groups is an array for filtering/sorting
+  const safeGroups = Array.isArray(groups) ? groups : [];
+  const filteredGroups = sortByDate(applySearch(applyFilter(safeGroups, filter), search));
 
   // On first mount, expand the top group if none are expanded (first visit only)
   useEffect(() => {
@@ -327,6 +361,38 @@ export default function Dashboard() {
     // Only runs on mount
     // eslint-disable-next-line
   }, []);
+
+
+  // Show error overlay if fatal error
+  if (fatalError) {
+    return (
+      <LoadingOverlay open={true} label={fatalError}>
+        <div style={{ marginTop: 24 }}>
+          <button
+            style={{
+              background: '#3B82F6', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontWeight: 600, fontSize: 16, cursor: 'pointer', marginRight: 12
+            }}
+            onClick={() => { window.location.href = '/login'; }}
+          >
+            Log In Again
+          </button>
+          <button
+            style={{
+              background: '#e5e7eb', color: '#374151', border: 'none', borderRadius: 8, padding: '10px 24px', fontWeight: 600, fontSize: 16, cursor: 'pointer'
+            }}
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
+        </div>
+      </LoadingOverlay>
+    );
+  }
+
+  // Show loading overlay until files/folders are loaded
+  if (loading || groups === null) {
+    return <LoadingOverlay open={true} label={loadingLabel} />;
+  }
 
   return (
     <div className="dashboard-container" style={{ 
