@@ -2057,12 +2057,16 @@ export default function Dashboard() {
         items={trayItems}
         onClose={() => setTrayItems([])}
         onAllDone={(names) => {
-          setToast({ visible: true, message: names.length === 1 ? `${names[0]} uploaded successfully` : `${names.length} files uploaded successfully` });
+          setToast({ visible: true, message: names.length === 1 ? 'File uploaded successfully' : `${names.length} files uploaded successfully`, type: 'success' });
           setTimeout(() => setTrayItems([]), 1500);
           setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+          // Close upload progress modal if it's open
+          if (openUploadProgress) {
+            setTimeout(() => setOpenUploadProgress(false), 1500);
+          }
         }}
       />
-      <Toast message={toast.message} visible={toast.visible} />
+      <Toast message={toast.message} visible={toast.visible} type={toast.type} />
       <LoadingOverlay open={loading} label={loadingLabel} />
       
       {/* Delete Confirmation Dialog */}
@@ -2140,14 +2144,14 @@ export default function Dashboard() {
                       invalidate();
                       const all = await fetchDrive({ fresh: true });
                       setGroups(all);
-                      setToast({ visible: true, message: 'Folder deleted successfully' });
+                      setToast({ visible: true, message: 'Folder deleted successfully', type: 'success' });
                       setTimeout(() => setToast({ visible: false, message: '' }), 3000);
                     } catch (e) {
                       console.error('Delete folder error:', e);
                       if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('Authentication failed')) {
                         setSessionExpired(true);
                       } else {
-                        setToast({ visible: true, message: 'Failed to delete folder' });
+                        setToast({ visible: true, message: 'Failed to delete folder', type: 'error' });
                         setTimeout(() => setToast({ visible: false, message: '' }), 3000);
                       }
                     } finally {
@@ -2163,14 +2167,14 @@ export default function Dashboard() {
                       invalidate();
                       const all = await fetchDrive({ fresh: true });
                       setGroups(all);
-                      setToast({ visible: true, message: 'File deleted successfully' });
+                      setToast({ visible: true, message: 'File deleted successfully', type: 'success' });
                       setTimeout(() => setToast({ visible: false, message: '' }), 3000);
                     } catch (e) {
                       console.error('Delete error:', e);
                       if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('Authentication failed')) {
                         setSessionExpired(true);
                       } else {
-                        setToast({ visible: true, message: 'Failed to delete file' });
+                        setToast({ visible: true, message: 'Failed to delete file', type: 'error' });
                         setTimeout(() => setToast({ visible: false, message: '' }), 3000);
                       }
                     } finally {
