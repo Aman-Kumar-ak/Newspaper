@@ -73,6 +73,7 @@ export default function Dashboard() {
     }
     return new Set();
   });
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [openMenuFileId, setOpenMenuFileId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { fileId, fileName }
@@ -299,6 +300,7 @@ export default function Dashboard() {
   }
 
   function toggleDateExpansion(date) {
+    setHasUserInteracted(true); // Mark that user has manually interacted
     setExpandedDates(prev => {
       const newSet = new Set(prev);
       if (newSet.has(date)) {
@@ -338,15 +340,15 @@ export default function Dashboard() {
   const safeGroups = Array.isArray(groups) ? groups : [];
   const filteredGroups = sortByDate(applySearch(applyFilter(safeGroups, filter), search));
 
-  // On first mount, expand the top group if none are expanded (first visit only)
+  // On first mount, expand the top group if none are expanded and user hasn't manually interacted
   useEffect(() => {
-    if (filteredGroups.length > 0 && expandedDates.size === 0) {
+    if (filteredGroups.length > 0 && expandedDates.size === 0 && !hasUserInteracted) {
       const topDate = filteredGroups[0].date;
       const newSet = new Set([topDate]);
       setExpandedDates(newSet);
       sessionStorage.setItem('expandedDates', JSON.stringify([topDate]));
     }
-  }, [filteredGroups]);
+  }, [filteredGroups, hasUserInteracted]);
 
   // On mount, restore expandedDates from sessionStorage (if user navigates back)
   useEffect(() => {
@@ -356,6 +358,7 @@ export default function Dashboard() {
         const arr = JSON.parse(saved);
         if (Array.isArray(arr)) {
           setExpandedDates(new Set(arr));
+          setHasUserInteracted(true); // If there's saved state, user has interacted before
         }
       } catch {}
     }
