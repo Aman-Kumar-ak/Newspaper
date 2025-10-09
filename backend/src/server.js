@@ -128,6 +128,14 @@ app.use((req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  // Handle authentication expiration
+  if (err.message === 'AUTHENTICATION_EXPIRED') {
+    return res.status(401).json({ 
+      error: 'AUTHENTICATION_EXPIRED',
+      message: 'Your session has expired. Please log in again.'
+    });
+  }
+  
   const statusCode = err.status || err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
   

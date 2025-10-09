@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getFileBytes, updateFileBytes } from '../../lib/drive';
+import { cacheSetPdf, cacheGetPdf } from '../../lib/idb';
 import { getTokens } from '../../state/authStore';
 import Toast from '../../components/ui/Toast';
 import { 
@@ -132,37 +133,45 @@ export default function PdfViewer() {
     if (!fileId) return;
 
     const loadFile = async () => {
+      setLoading(true);
+      setError('');
+      let response = null;
+      let bytes = null;
+      let responseFileName = '';
+      let loadedFromCache = false;
       try {
-        setLoading(true);
-        setError('');
-        
         console.log('Loading file for fileId:', fileId);
-        const response = await getFileBytes(fileId);
-        const { bytes, fileName: responseFileName } = response;
-        
+        try {
+          response = await getFileBytes(fileId);
+          bytes = response.bytes;
+          responseFileName = response.fileName;
+        } catch (err) {
+          // If fetch fails (offline), try IndexedDB
+          console.warn('Network fetch failed, trying offline cache:', err);
+          const cached = await cacheGetPdf(fileId);
+          if (cached && cached.fileBytes) {
+            bytes = cached.fileBytes;
+            responseFileName = cached.fileName || `file_${fileId}`;
+            loadedFromCache = true;
+            setToast({ message: 'Loaded PDF from offline cache.', type: 'success' });
+          } else {
+            throw new Error('File not available offline. Please connect to the internet and open this file once.');
+          }
+        }
         if (!bytes || bytes.byteLength === 0) {
           throw new Error('File is empty or not found');
         }
-        
-        // Detect file type from filename extension and content
         const finalFileName = responseFileName || `file_${fileId}`;
         setFileName(finalFileName);
-        
-        // Only handle PDF files
         const extension = finalFileName.split('.').pop()?.toLowerCase();
         if (extension !== 'pdf') {
           setError('This viewer only supports PDF files.');
           setLoading(false);
           return;
         }
-        
-        // bytes is already an ArrayBuffer from getFileBytes
-        const arrayBuffer = bytes;
+        const arrayBuffer = bytes instanceof ArrayBuffer ? bytes : new Uint8Array(bytes).buffer;
         const fileSizeMB = arrayBuffer.byteLength / (1024 * 1024);
-        
         console.log(`PDF file size: ${fileSizeMB.toFixed(2)} MB`);
-        
-        // Warn for large files
         if (fileSizeMB > 10) {
           console.warn('Large PDF file detected, may take longer to load');
           setToast({
@@ -170,35 +179,34 @@ export default function PdfViewer() {
             type: 'success',
           });
         }
-        
-        // Convert to Uint8Array for potential saving operations
         const uint8Array = new Uint8Array(arrayBuffer);
         setFileBytes(uint8Array);
-        
-        // Wait for Adobe API to be available
+        // If loaded from network, cache for offline
+        if (!loadedFromCache) {
+          try {
+            await cacheSetPdf(fileId, arrayBuffer, finalFileName);
+            console.log('PDF cached for offline use');
+          } catch (e) {
+            console.warn('Failed to cache PDF for offline:', e);
+          }
+        }
         if (!window.AdobeDC) {
           throw new Error('Adobe PDF Embed API not loaded');
         }
-        
-        // Initialize Adobe PDF viewer with proper ArrayBuffer and filename
         initializeAdobeViewer(arrayBuffer, finalFileName);
-        
-        // Set a timeout to prevent infinite loading for large files
         setTimeout(() => {
           if (loading) {
             console.warn('PDF loading timeout - file may be too large');
             setLoading(false);
             setError('PDF is taking too long to load. This might be due to large file size. Please try again or use a smaller file.');
           }
-        }, 30000); // 30 second timeout
-        
+        }, 30000);
       } catch (err) {
         console.error('Error loading file:', err);
         setError('Failed to load file: ' + err.message);
         setLoading(false);
       }
     };
-
     loadFile();
   }, [fileId]);
 

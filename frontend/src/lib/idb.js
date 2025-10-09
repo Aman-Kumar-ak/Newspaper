@@ -1,7 +1,9 @@
 // Minimal IndexedDB helpers for caching groups and files
+
 const DB_NAME = 'newspapers-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Bump version for new store
 const STORE_GROUPS = 'groups';
+const STORE_PDFS = 'pdfs';
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -9,10 +11,48 @@ function openDb() {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE_GROUPS)) db.createObjectStore(STORE_GROUPS);
+      if (!db.objectStoreNames.contains(STORE_PDFS)) db.createObjectStore(STORE_PDFS);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+// Cache a PDF file (ArrayBuffer or Blob) by fileId
+export async function cacheSetPdf(fileId, fileBytes, fileName) {
+  const db = await openDb();
+  const tx = db.transaction(STORE_PDFS, 'readwrite');
+  tx.objectStore(STORE_PDFS).put({ fileBytes, fileName, timestamp: Date.now() }, fileId);
+  await new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+// Get a cached PDF file by fileId
+export async function cacheGetPdf(fileId) {
+  const db = await openDb();
+  const tx = db.transaction(STORE_PDFS, 'readonly');
+  const req = tx.objectStore(STORE_PDFS).get(fileId);
+  const result = await new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return result;
+}
+
+// Get all cached PDF file IDs
+export async function cacheGetAllPdfIds() {
+  const db = await openDb();
+  const tx = db.transaction(STORE_PDFS, 'readonly');
+  const req = tx.objectStore(STORE_PDFS).getAllKeys();
+  const result = await new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return result;
 }
 
 export async function cacheSetGroups(groups) {

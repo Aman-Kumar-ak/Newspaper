@@ -7,7 +7,7 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { startGoogleLogin, tryReadTokensFromCallbackPayload, logoutGoogle } from '../../lib/auth';
 import { setTokens, getTokens } from '../../state/authStore';
-import { listAllGrouped, listAllGroupedProgressive, uploadWithProgress, deleteFile, deleteFolderByDate, getGroupForDate, checkFolderExists } from '../../lib/drive';
+import { listAllGrouped, listAllGroupedProgressive, uploadWithProgress, deleteFile, deleteFolderByDate, getGroupForDate, checkFolderExists, getFileBytes } from '../../lib/drive';
 import Modal from '../../components/ui/Modal.jsx';
 import UploadTray from '../../components/ui/UploadTray.jsx';
 import Toast from '../../components/ui/Toast.jsx';
@@ -15,6 +15,7 @@ import LoadingOverlay from '../../components/ui/LoadingOverlay.jsx';
 import PdfThumbnail from '../../components/pdf/PdfThumbnail.jsx';
 import ThumbnailPreloader from '../../components/pdf/ThumbnailPreloader.jsx';
 import { useDriveCache } from '../../hooks/DriveCacheContext';
+import { cacheSetPdf, cacheGetPdf, cacheGetAllPdfIds } from '../../lib/idb';
 // Importing useDriveCache from the correct path
 // The file extension .jsx is not necessary when importing modules in JavaScript
 
@@ -79,6 +80,9 @@ export default function Dashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { fileId, fileName }
   const [sessionExpired, setSessionExpired] = useState(false);
   const [redirectTimer, setRedirectTimer] = useState(5);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineFiles, setOfflineFiles] = useState(new Set());
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const profileMenuRef = useRef(null);
   const profileBtnRef = useRef(null);
   const [profileMenuPos, setProfileMenuPos] = useState({ top: 0, left: 0 });
@@ -97,12 +101,27 @@ export default function Dashboard() {
     }
 
     // Check if user is authenticated, redirect to login if not
+    // BUT allow offline mode if user has cached data
     const existing = getTokens();
-    if (!existing.accessToken && !t?.accessToken) {
+    const isOffline = !navigator.onLine;
+    
+    if (!existing.accessToken && !t?.accessToken && !isOffline) {
       console.warn('⚠️ No authentication token found. Redirecting to login...');
       navigateTo('/login');
       return;
     }
+
+    // Track online/offline status
+    const handleOnline = () => {
+      console.log('🌐 Network is back online!');
+      setIsOnline(true);
+    };
+    const handleOffline = () => {
+      console.log('📴 Network went offline');
+      setIsOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     // If already signed in but profile fields are missing, fetch them
     (async () => {
@@ -121,25 +140,27 @@ export default function Dashboard() {
       if (cachedGroups && Array.isArray(cachedGroups)) {
         setGroups(cachedGroups);
         setLoading(false);
-        // Start background refresh for latest data
-        (async () => {
-          try {
-            setLoadingLabel('Checking for new files...');
-            const allGroups = await fetchDrive({ fresh: true });
-            if (Array.isArray(allGroups)) {
-              setGroups(allGroups);
+        // Start background refresh for latest data only if online
+        if (navigator.onLine && existing.accessToken) {
+          (async () => {
+            try {
+              setLoadingLabel('Checking for new files...');
+              const allGroups = await fetchDrive({ fresh: true });
+              if (Array.isArray(allGroups)) {
+                setGroups(allGroups);
+              }
+            } catch (e) {
+              // Only show error if no cache
+              if (!cachedGroups || !cachedGroups.length) {
+                setFatalError('Failed to load your files. Please check your connection or try again.');
+              }
+            } finally {
+              setLoading(false);
             }
-          } catch (e) {
-            // Only show error if no cache
-            if (!cachedGroups || !cachedGroups.length) {
-              setFatalError('Failed to load your files. Please check your connection or try again.');
-            }
-          } finally {
-            setLoading(false);
-          }
-        })();
-      } else {
-        // No cache, fetch fresh
+          })();
+        }
+      } else if (navigator.onLine && existing.accessToken) {
+        // No cache, fetch fresh (only if online)
         (async () => {
           try {
             setLoading(true);
@@ -147,15 +168,72 @@ export default function Dashboard() {
             const allGroups = await fetchDrive({ fresh: true });
             setGroups(Array.isArray(allGroups) ? allGroups : []);
           } catch (e) {
-            setFatalError('Failed to load your files. Please check your connection or try again.');
+            console.error('Failed to fetch files:', e);
+            if (e.message === 'OFFLINE' || !navigator.onLine) {
+              // Offline error - just show empty state
+              setGroups([]);
+              setLoading(false);
+            } else {
+              setFatalError('Failed to load your files. Please check your connection or try again.');
+            }
           } finally {
             setLoading(false);
+          }
+        })();
+      } else {
+        // Offline and no cache - show empty state with helpful message
+        console.log('[Dashboard] Offline with no cache - showing empty state');
+        setGroups([]);
+        setLoading(false);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+    // eslint-disable-next-line
+  }, [cachedGroups]);
+
+  // Refetch data when coming back online
+  useEffect(() => {
+    if (isOnline && groups !== null) {
+      const existing = getTokens();
+      if (existing.accessToken) {
+        console.log('🔄 Back online - refreshing data...');
+        (async () => {
+          try {
+            setLoadingLabel('Refreshing data...');
+            const allGroups = await fetchDrive({ fresh: true });
+            if (Array.isArray(allGroups)) {
+              setGroups(allGroups);
+              console.log('✅ Data refreshed successfully');
+            }
+          } catch (e) {
+            console.error('Failed to refresh data after coming online:', e);
+            // Keep showing cached data if refresh fails
           }
         })();
       }
     }
     // eslint-disable-next-line
-  }, [cachedGroups]);
+  }, [isOnline]);
+
+  // Check which files are available offline - runs on mount and when groups change
+  useEffect(() => {
+    const checkOfflineFiles = async () => {
+      try {
+        // Always get all cached PDF IDs from IndexedDB
+        const cachedIds = await cacheGetAllPdfIds();
+        const offlineSet = new Set(cachedIds);
+        setOfflineFiles(offlineSet);
+        console.log('[Dashboard] Found offline files:', cachedIds);
+      } catch (e) {
+        console.error('[Dashboard] Error checking offline files:', e);
+      }
+    };
+    checkOfflineFiles();
+  }, [groups]); // Re-check when groups change
 
   // Always get latest tokens for profile info
   const tokens = getTokens();
@@ -258,6 +336,39 @@ export default function Dashboard() {
     }
   }
 
+  const handleMakeOffline = async (fileId, fileName) => {
+    setOpenMenuFileId(null);
+    try {
+      const { bytes, fileName: responseName } = await getFileBytes(fileId);
+      await cacheSetPdf(fileId, bytes, responseName || fileName);
+      setOfflineFiles(prev => new Set([...prev, fileId]));
+      setToast({ visible: true, message: `"${fileName}" saved for offline use` });
+    } catch (e) {
+      setToast({ visible: true, message: 'Failed to save file for offline use' });
+    }
+  };
+
+  const handleRemoveOffline = async (fileId, fileName) => {
+    setOpenMenuFileId(null);
+    try {
+      const db = await window.indexedDB.open('newspapers-db', 2);
+      db.onsuccess = () => {
+        const tx = db.result.transaction('pdfs', 'readwrite');
+        tx.objectStore('pdfs').delete(fileId);
+        tx.oncomplete = () => {
+          setOfflineFiles(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(fileId);
+            return newSet;
+          });
+          setToast({ visible: true, message: `"${fileName}" removed from offline storage` });
+        };
+      };
+    } catch (e) {
+      setToast({ visible: true, message: 'Failed to remove offline file' });
+    }
+  };
+
     function applyFilter(groupsIn, f, specificDateValue = '') {
     if (f === 'All') return groupsIn;
     const now = new Date();
@@ -338,7 +449,14 @@ export default function Dashboard() {
 
   // Always ensure groups is an array for filtering/sorting
   const safeGroups = Array.isArray(groups) ? groups : [];
-  const filteredGroups = sortByDate(applySearch(applyFilter(safeGroups, filter), search));
+  
+  // Filter for offline mode: show only files that are available offline
+  const offlineFilteredGroups = isOnline ? safeGroups : safeGroups.map(group => ({
+    ...group,
+    files: (group.files || []).filter(file => offlineFiles.has(file.fileId))
+  })).filter(group => group.files && group.files.length > 0);
+  
+  const filteredGroups = sortByDate(applySearch(applyFilter(offlineFilteredGroups, filter), search));
 
   // On first mount, expand the top group if none are expanded and user hasn't manually interacted
   useEffect(() => {
@@ -667,35 +785,37 @@ export default function Dashboard() {
 
         {/* Right: Upload + Profile */}
         <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px', justifySelf: 'end', transform: 'translateX(var(--profile-right-shift, 0px))' }}>
-          {/* Upload Button */}
-          <button
-            className="upload-button desktop-upload"
-            onClick={() => setOpenUpload(true)}
-            style={{
-              background: '#3B82F6',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '10px 16px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 500,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              outline: 'none',
-              WebkitTapHighlightColor: 'transparent',
-              userSelect: 'none',
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7,10 12,15 17,10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Upload
-          </button>
+          {/* Upload Button - Hide when offline */}
+          {isOnline && (
+            <button
+              className="upload-button desktop-upload"
+              onClick={() => setOpenUpload(true)}
+              style={{
+                background: '#3B82F6',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '10px 16px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 500,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                outline: 'none',
+                WebkitTapHighlightColor: 'transparent',
+                userSelect: 'none',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7,10 12,15 17,10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Upload
+            </button>
+          )}
           
           {/* Profile Icon */}
           <div style={{ position: 'relative' }}>
@@ -910,7 +1030,11 @@ export default function Dashboard() {
               fontSize: '16px',
               color: '#6B7280',
             }}>
-              {search ? 'No files found matching your search.' : 'No files yet. Upload your first PDF.'}
+              {!isOnline && offlineFiles.size === 0 
+                ? 'No offline files available. Please connect to the internet and mark files as "available offline".' 
+                : search 
+                ? 'No files found matching your search.' 
+                : 'No files yet. Upload your first PDF.'}
             </div>
           ) : (
             <div className="date-groups-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -993,6 +1117,8 @@ export default function Dashboard() {
                       gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
                       gap: '20px',
                       marginLeft: '24px',
+                      position: 'relative',
+                      zIndex: 1,
                     }}>
                       {group.files.map((file) => (
                         <div
@@ -1014,10 +1140,15 @@ export default function Dashboard() {
                           }}
                         >
                           {/* Three-dot menu */}
-                          <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 20 }} ref={openMenuFileId === file.fileId ? menuRef : null}>
+                          <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 9998 }} ref={openMenuFileId === file.fileId ? menuRef : null}>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setMenuPosition({
+                                  top: rect.bottom + 4,
+                                  left: rect.left - 140,
+                                });
                                 setOpenMenuFileId(openMenuFileId === file.fileId ? null : file.fileId);
                               }}
                               style={{
@@ -1052,19 +1183,95 @@ export default function Dashboard() {
                               </svg>
                             </button>
                             
-                            {openMenuFileId === file.fileId && (
-                              <div style={{
-                                position: 'absolute',
-                                top: '40px',
-                                right: '0',
+                            {openMenuFileId === file.fileId && createPortal(
+                              <div 
+                                ref={menuRef}
+                                style={{
+                                position: 'fixed',
+                                top: `${menuPosition.top}px`,
+                                left: `${menuPosition.left}px`,
                                 background: 'white',
                                 border: '1px solid #F3F4F6',
                                 borderRadius: '12px',
                                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-                                minWidth: '140px',
-                                zIndex: 100,
+                                minWidth: '180px',
+                                zIndex: 99999,
                                 overflow: 'hidden',
                               }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isOnline && !offlineFiles.has(file.fileId)) {
+                                      handleMakeOffline(file.fileId, file.fileName || file.name);
+                                    }
+                                  }}
+                                  disabled={!isOnline || offlineFiles.has(file.fileId)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    textAlign: 'left',
+                                    cursor: (isOnline && !offlineFiles.has(file.fileId)) ? 'pointer' : 'not-allowed',
+                                    fontSize: '13px',
+                                    color: (isOnline && !offlineFiles.has(file.fileId)) ? '#2563EB' : '#bbb',
+                                    fontWeight: 500,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    outline: 'none',
+                                    WebkitTapHighlightColor: 'transparent',
+                                    userSelect: 'none',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (isOnline && !offlineFiles.has(file.fileId)) {
+                                      e.currentTarget.style.background = '#EFF6FF';
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 5v14m7-7H5"/>
+                                  </svg>
+                                  Make available offline
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (offlineFiles.has(file.fileId)) {
+                                      handleRemoveOffline(file.fileId, file.fileName || file.name);
+                                    }
+                                  }}
+                                  disabled={!offlineFiles.has(file.fileId)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    textAlign: 'left',
+                                    cursor: offlineFiles.has(file.fileId) ? 'pointer' : 'not-allowed',
+                                    fontSize: '13px',
+                                    color: offlineFiles.has(file.fileId) ? '#EF4444' : '#bbb',
+                                    fontWeight: 500,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    outline: 'none',
+                                    WebkitTapHighlightColor: 'transparent',
+                                    userSelect: 'none',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (offlineFiles.has(file.fileId)) {
+                                      e.currentTarget.style.background = '#FEF2F2';
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M18 6L6 18M6 6l12 12"/>
+                                  </svg>
+                                  Remove from offline
+                                </button>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1096,7 +1303,8 @@ export default function Dashboard() {
                                   </svg>
                                   Delete
                                 </button>
-                              </div>
+                              </div>,
+                              document.body
                             )}
                           </div>
 
@@ -1109,8 +1317,27 @@ export default function Dashboard() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            position: 'relative',
                           }}>
                             <PdfThumbnail fileId={file.fileId} fileName={file.fileName || file.name} />
+                            {offlineFiles.has(file.fileId) && (
+                              <div style={{
+                                position: 'absolute',
+                                bottom: 8,
+                                right: 8,
+                                background: '#059669',
+                                borderRadius: '50%',
+                                padding: 4,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                              }} title="Available offline">
+                                <svg width="16" height="16" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
+                                  <path d="M7 13l3 3 7-7"/>
+                                </svg>
+                              </div>
+                            )}
                           </div>
 
                           {/* File info section */}
@@ -1227,8 +1454,8 @@ export default function Dashboard() {
 
 
       {/* Hide upload button when upload popup is open */}
-      {/* Hide upload button during any modal/popup (upload, delete, upload progress) */}
-      {!(openUpload || deleteConfirm || openUploadProgress) && (
+      {/* Hide upload button during any modal/popup (upload, delete, upload progress) or when offline */}
+      {isOnline && !(openUpload || deleteConfirm || openUploadProgress) && (
         <button
           className="mobile-upload-fab"
           onClick={() => setOpenUpload(true)}

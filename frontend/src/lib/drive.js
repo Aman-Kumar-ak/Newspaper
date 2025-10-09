@@ -2,8 +2,7 @@
 export async function deleteFolderByDate(date) {
   const url = new URL(`${API_BASE}/drive/folder/${encodeURIComponent(date)}`);
   const res = await fetch(url, { method: 'DELETE', headers: authHeaders() });
-  if (!res.ok) throw new Error('Failed to delete folder');
-  return res.json();
+  return handleApiResponse(res);
 }
 import { getTokens } from '../state/authStore';
 import { cacheGetGroups, cacheSetGroups } from './idb';
@@ -32,16 +31,37 @@ function authHeaders() {
   return h;
 }
 
+// Helper to handle API responses and check for authentication errors
+async function handleApiResponse(res) {
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    
+    // Check if authentication expired
+    if (res.status === 401 || errorData.error === 'AUTHENTICATION_EXPIRED') {
+      console.error('🔒 Authentication expired - redirecting to login');
+      // Clear stored tokens
+      localStorage.removeItem('googleTokens');
+      // Redirect to login
+      window.location.href = '/login';
+      throw new Error('AUTHENTICATION_EXPIRED');
+    }
+    
+    throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+  }
+  
+  return res.json();
+}
+
 export async function ensureRoot() {
   const res = await fetch(`${API_BASE}/drive/root`, { headers: authHeaders() });
-  return res.json();
+  return handleApiResponse(res);
 }
 
 export async function ensureFolder(date) {
   const url = new URL(`${API_BASE}/drive/folder`);
   url.searchParams.set('date', formatDateToDDMMYYYY(date));
   const res = await fetch(url, { headers: authHeaders() });
-  return res.json();
+  return handleApiResponse(res);
 }
 
 export async function checkFolderExists(date) {
@@ -61,7 +81,7 @@ export async function listByDate(date) {
   const url = new URL(`${API_BASE}/drive/list`);
   url.searchParams.set('date', formatDateToDDMMYYYY(date));
   const res = await fetch(url, { headers: authHeaders() });
-  return res.json();
+  return handleApiResponse(res);
 }
 
 export async function upload(date, file) {
@@ -73,7 +93,7 @@ export async function upload(date, file) {
     headers: authHeaders(),
     body: fd,
   });
-  return res.json();
+  return handleApiResponse(res);
 }
 
 export function uploadWithProgress(date, file, onProgress, folderExists = true) {
@@ -129,20 +149,63 @@ export function uploadWithProgress(date, file, onProgress, folderExists = true) 
 }
 
 export async function listDates() {
-  const res = await fetch(`${API_BASE}/drive/dates`, { headers: authHeaders() });
-  return res.json();
+  // Try the request even if navigator.onLine is false - it might be stale
+  try {
+    const res = await fetch(`${API_BASE}/drive/dates`, { headers: authHeaders() });
+    return handleApiResponse(res);
+  } catch (error) {
+    // If truly offline, throw OFFLINE error
+    if (!navigator.onLine || error.message.includes('Failed to fetch')) {
+      throw new Error('OFFLINE');
+    }
+    throw error;
+  }
 }
 
 export async function listAllGrouped(opts = {}) {
   const fresh = !!opts.fresh;
-  if (!fresh) {
-    const cached = await cacheGetGroups();
-    if (cached && cached.length) {
-      // Return cached immediately and refresh in background
-      refreshGroupsInBackground();
-      return cached;
+  
+  // If forcing fresh, always try to fetch (even if navigator.onLine is stale)
+  if (fresh) {
+    try {
+      const res = await listDates();
+      const dates = (res.dates || []).map(d => d.date);
+      const groups = [];
+      for (const d of dates) {
+        const filesRes = await listByDate(d);
+        groups.push({ date: d, files: filesRes.files || [] });
+      }
+      // sort by date desc (DD-MM-YYYY)
+      groups.sort((a, b) => {
+        const [ad, am, ay] = a.date.split('-').map(Number);
+        const [bd, bm, by] = b.date.split('-').map(Number);
+        const at = new Date(ay, am - 1, ad).getTime();
+        const bt = new Date(by, bm - 1, bd).getTime();
+        return bt - at;
+      });
+      await cacheSetGroups(groups);
+      return groups;
+    } catch (error) {
+      // If network error, return cached data as fallback
+      if (error.message === 'OFFLINE' || !navigator.onLine) {
+        console.log('[Drive] Network unavailable - returning cached data');
+        const cached = await cacheGetGroups();
+        return cached || [];
+      }
+      throw error;
     }
   }
+  
+  // Not forcing fresh - use cache if available
+  const cached = await cacheGetGroups();
+  if (cached && cached.length) {
+    // Return cached immediately and refresh in background
+    refreshGroupsInBackground();
+    return cached;
+  }
+  
+  // No cache - try to fetch
+  
   const res = await listDates();
   const dates = (res.dates || []).map(d => d.date);
   const groups = [];
@@ -219,16 +282,24 @@ export async function* listAllGroupedProgressive(opts = {}) {
 
 export async function deleteFile(fileId) {
   const res = await fetch(`${API_BASE}/drive/file/${fileId}`, { method: 'DELETE', headers: authHeaders() });
-  return res.json();
+  return handleApiResponse(res);
 }
 
 export async function getFileBytes(fileId) {
   const res = await fetch(`${API_BASE}/drive/file/${fileId}`, { headers: authHeaders() });
   
   if (!res.ok) {
-    const errorText = await res.text();
-    console.error('Error response body:', errorText);
-    throw new Error(`Failed to fetch file: ${res.status} ${res.statusText} - ${errorText}`);
+    const errorData = await res.json().catch(() => ({}));
+    
+    // Check if authentication expired
+    if (res.status === 401 || errorData.error === 'AUTHENTICATION_EXPIRED') {
+      console.error('🔒 Authentication expired - redirecting to login');
+      localStorage.removeItem('googleTokens');
+      window.location.href = '/login';
+      throw new Error('AUTHENTICATION_EXPIRED');
+    }
+    
+    throw new Error(`Failed to fetch file: ${res.status} ${res.statusText}`);
   }
   
   // Get file name from response headers if available
@@ -282,10 +353,7 @@ export async function updateFileBytes(fileId, file) {
     headers: authHeaders(),
     body: fd,
   });
-  if (!res.ok) {
-    throw new Error(`Failed to update file: ${res.status} ${res.statusText}`);
-  }
-  return res.json();
+  return handleApiResponse(res);
 }
 
 async function refreshGroupsInBackground() {
