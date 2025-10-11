@@ -58,10 +58,10 @@ export default function PdfViewer() {
     return () => window.removeEventListener('popstate', handleNavigation);
   }, []);
 
-  // Auto-clear toast after 3 seconds
+  // Auto-clear toast after 2 seconds
   useEffect(() => {
     if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000);
+      const timer = setTimeout(() => setToast(null), 2000);
       return () => clearTimeout(timer);
     }
   }, [toast]);

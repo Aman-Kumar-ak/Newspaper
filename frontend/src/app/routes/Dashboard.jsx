@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [date, setDate] = useState(''); // DD-MM-YYYY for backend
   const [dateISO, setDateISO] = useState(''); // YYYY-MM-DD for <input type="date">
   const [file, setFile] = useState(null);
+  const [multipleFiles, setMultipleFiles] = useState([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [specificDate, setSpecificDate] = useState('');
@@ -62,6 +63,61 @@ export default function Dashboard() {
   const [uploadPct, setUploadPct] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('Uploading');
+  
+  // Process individual uploads independently
+  const processUpload = async (item) => {
+    try {
+      // Check if folder exists
+      const folderExists = await checkFolderExists(item.date);
+      
+      if (!folderExists) {
+        // Show folder creation status
+        setTrayItems(prev => prev.map(x => x.id === item.id ? 
+          { ...x, pct: 0, status: 'creating-folder' } : x
+        ));
+        // Simulate folder creation progress (0-50%)
+        await new Promise(resolve => setTimeout(resolve, 100));
+        setTrayItems(prev => prev.map(x => x.id === item.id ? 
+          { ...x, pct: 25, status: 'creating-folder' } : x
+        ));
+      }
+      
+      // Start upload
+      const { promise } = uploadWithProgress(item.date, item.file, (pct) => {
+        setTrayItems(prev => prev.map(x => x.id === item.id ? 
+          { ...x, pct, status: pct >= 100 ? 'processing' : 'uploading' } : x
+        ));
+      }, folderExists);
+      
+      await promise;
+      setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, pct: 100, status: 'done' } : x));
+      
+      // Update the groups for this specific date
+      const updated = await getGroupForDate(item.date);
+      setGroups(prev => {
+        const others = prev.filter(g => g.date !== updated.date);
+        return sortByDate(applyFilter([updated, ...others], filter));
+      });
+    } catch (e) {
+      console.error('Upload error for file:', item.name, e);
+      setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, status: 'error' } : x));
+      
+      // Show authentication error modal if 401
+      if (e.message.includes('Authentication failed') || e.message.includes('Not authenticated')) {
+        setSessionExpired(true);
+      } else {
+        // Only show toast for the first error to avoid spam
+        setTrayItems(prev => {
+          const hasOtherErrors = prev.some(x => x.id !== item.id && x.status === 'error');
+          if (!hasOtherErrors) {
+            setToast({ visible: true, message: `Upload failed: ${e.message || 'Unknown error'}`, type: 'error' });
+            setTimeout(() => setToast({ visible: false, message: '' }), 2000);
+          }
+          return prev;
+        });
+      }
+    }
+  };
   // Persistent expandedDates: restore from sessionStorage, else empty
   const [expandedDates, setExpandedDates] = useState(() => {
     const saved = sessionStorage.getItem('expandedDates');
@@ -82,7 +138,15 @@ export default function Dashboard() {
   const [redirectTimer, setRedirectTimer] = useState(5);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineFiles, setOfflineFiles] = useState(new Set());
+  const [downloadingFiles, setDownloadingFiles] = useState(new Set());
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  
+  // Utility function to truncate file names for notifications
+  const truncateFileName = (fileName, maxLength = 20) => {
+    if (!fileName) return 'Untitled';
+    if (fileName.length <= maxLength) return fileName;
+    return fileName.substring(0, maxLength) + '...';
+  };
   const profileMenuRef = useRef(null);
   const profileBtnRef = useRef(null);
   const [profileMenuPos, setProfileMenuPos] = useState({ top: 0, left: 0 });
@@ -101,11 +165,12 @@ export default function Dashboard() {
     }
 
     // Check if user is authenticated, redirect to login if not
-    // BUT allow offline mode if user has cached data
+    // BUT allow offline mode if user has cached data or is offline
     const existing = getTokens();
     const isOffline = !navigator.onLine;
+    const hasCachedData = cachedGroups && Array.isArray(cachedGroups) && cachedGroups.length > 0;
     
-    if (!existing.accessToken && !t?.accessToken && !isOffline) {
+    if (!existing.accessToken && !t?.accessToken && !isOffline && !hasCachedData) {
       console.warn('⚠️ No authentication token found. Redirecting to login...');
       navigateTo('/login');
       return;
@@ -138,6 +203,7 @@ export default function Dashboard() {
     // If nothing loaded yet, show loading until we have cache or fresh data
     if (groups === null) {
       if (cachedGroups && Array.isArray(cachedGroups)) {
+        console.log('[Dashboard] Using cached data for offline user');
         setGroups(cachedGroups);
         setLoading(false);
         // Start background refresh for latest data only if online
@@ -181,7 +247,24 @@ export default function Dashboard() {
           }
         })();
       } else {
-        // Offline and no cache - show empty state with helpful message
+        // Offline and no cache - try to load from localStorage as fallback
+        console.log('[Dashboard] Offline with no cache - checking localStorage fallback');
+        try {
+          const cached = localStorage.getItem('cachedGroups');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('[Dashboard] Found cached data in localStorage for offline user');
+              setGroups(parsed);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('[Dashboard] No cached data found in localStorage');
+        }
+        
+        // No cache found - show empty state with helpful message
         console.log('[Dashboard] Offline with no cache - showing empty state');
         setGroups([]);
         setLoading(false);
@@ -338,13 +421,32 @@ export default function Dashboard() {
 
   const handleMakeOffline = async (fileId, fileName) => {
     setOpenMenuFileId(null);
+    
+    // Add to downloading set
+    setDownloadingFiles(prev => new Set([...prev, fileId]));
+    
     try {
       const { bytes, fileName: responseName } = await getFileBytes(fileId);
       await cacheSetPdf(fileId, bytes, responseName || fileName);
+      
+      // Remove from downloading and add to offline
+      setDownloadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
       setOfflineFiles(prev => new Set([...prev, fileId]));
-      setToast({ visible: true, message: `"${fileName}" saved for offline use` });
+      setToast({ visible: true, message: `"${truncateFileName(fileName)}" made offline`, type: 'success' });
+      setTimeout(() => setToast({ visible: false, message: '' }), 2000);
     } catch (e) {
-      setToast({ visible: true, message: 'Failed to save file for offline use' });
+      // Remove from downloading on error
+      setDownloadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
+      setToast({ visible: true, message: 'Failed to save file for offline use', type: 'error' });
+      setTimeout(() => setToast({ visible: false, message: '' }), 2000);
     }
   };
 
@@ -361,11 +463,13 @@ export default function Dashboard() {
             newSet.delete(fileId);
             return newSet;
           });
-          setToast({ visible: true, message: `"${fileName}" removed from offline storage` });
+          setToast({ visible: true, message: `"${truncateFileName(fileName)}" removed from offline storage`, type: 'success' });
+          setTimeout(() => setToast({ visible: false, message: '' }), 2000);
         };
       };
     } catch (e) {
-      setToast({ visible: true, message: 'Failed to remove offline file' });
+      setToast({ visible: true, message: 'Failed to remove offline file', type: 'error' });
+      setTimeout(() => setToast({ visible: false, message: '' }), 2000);
     }
   };
 
@@ -1359,6 +1463,29 @@ export default function Dashboard() {
                               {file.fileName || file.name || 'Untitled'}
                             </div>
                           </div>
+
+                          {/* Download progress bar */}
+                          {downloadingFiles.has(file.fileId) && (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              height: '4px',
+                              background: '#E5E7EB',
+                              borderRadius: '0 0 16px 16px',
+                              overflow: 'hidden',
+                            }}>
+                              <div style={{
+                                height: '100%',
+                                background: 'linear-gradient(90deg, #10B981 0%, #059669 100%)',
+                                borderRadius: '0 0 16px 16px',
+                                animation: 'downloadProgress 1.5s ease-in-out infinite',
+                                width: '100%',
+                                transform: 'translateX(-100%)',
+                              }} />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1499,6 +1626,15 @@ export default function Dashboard() {
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+        
+        @keyframes downloadProgress {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
         }
         
         @keyframes slideInRight {
@@ -2015,7 +2151,17 @@ export default function Dashboard() {
                     id="file-upload"
                     type="file" 
                     accept="application/pdf" 
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length > 0) {
+                        setFile(files[0]); // Keep first file for display
+                        setMultipleFiles(files); // Store all files
+                      } else {
+                        setFile(null);
+                        setMultipleFiles([]);
+                      }
+                    }}
                     style={{
                       position: 'absolute',
                       opacity: 0,
@@ -2037,13 +2183,16 @@ export default function Dashboard() {
                     justifyContent: 'space-between',
                     cursor: 'pointer',
                   }}>
-                    <span style={{ 
+                    <span style={{
                       overflow: 'hidden', 
                       textOverflow: 'ellipsis', 
                       whiteSpace: 'nowrap',
                       flex: 1,
                     }}>
-                      {file ? file.name : 'No file chosen'}
+                      {multipleFiles.length > 1 
+                        ? `${multipleFiles.length} files selected` 
+                        : file ? file.name : 'No file chosen'
+                      }
                     </span>
                     <button
                       type="button"
@@ -2099,68 +2248,46 @@ export default function Dashboard() {
                   Cancel
                 </button>
                 <button
-                  disabled={!date || !file}
+                  disabled={!date || (!file && multipleFiles.length === 0)}
                   onClick={async () => {
-                    if (!date || !file) return;
+                    if (!date || (!file && multipleFiles.length === 0)) return;
                     setOpenUpload(false);
-                    const item = { id: `${Date.now()}-${Math.random()}`, name: file.name, pct: 0, status: 'checking' };
-                    setTrayItems(prev => [...prev, item]);
                     
-                    try {
-                      // Check if folder exists
-                      const folderExists = await checkFolderExists(date);
-                      
-                      if (!folderExists) {
-                        // Show folder creation status
-                        setTrayItems(prev => prev.map(x => x.id === item.id ? 
-                          { ...x, pct: 0, status: 'creating-folder' } : x
-                        ));
-                        // Simulate folder creation progress (0-50%)
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        setTrayItems(prev => prev.map(x => x.id === item.id ? 
-                          { ...x, pct: 25, status: 'creating-folder' } : x
-                        ));
-                      }
-                      
-                      // Start upload
-                      const { promise } = uploadWithProgress(date, file, (pct) => {
-                        setTrayItems(prev => prev.map(x => x.id === item.id ? 
-                          { ...x, pct, status: pct >= 100 ? 'processing' : 'uploading' } : x
-                        ));
-                      }, folderExists);
-                      
-                      await promise;
-                      setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, pct: 100, status: 'done' } : x));
-                      const updated = await getGroupForDate(date);
-                      setGroups(prev => {
-                        const others = prev.filter(g => g.date !== updated.date);
-                        return sortByDate(applyFilter([updated, ...others], filter));
-                      });
-                    } catch (e) {
-                      console.error('Upload error:', e);
-                      setTrayItems(prev => prev.map(x => x.id === item.id ? { ...x, status: 'error' } : x));
-                      
-                      // Show authentication error modal if 401
-                      if (e.message.includes('Authentication failed') || e.message.includes('Not authenticated')) {
-                        setSessionExpired(true);
-                      } else {
-                        setToast({ visible: true, message: 'Upload failed: ' + (e.message || 'Unknown error'), type: 'error' });
-                      }
-                    }
+                    // Get files to upload (either single file or multiple files)
+                    const filesToUpload = multipleFiles.length > 0 ? multipleFiles : [file];
+                    
+                    // Create upload items for each file
+                    const uploadItems = filesToUpload.map(file => ({
+                      id: `${Date.now()}-${Math.random()}-${file.name}`,
+                      name: file.name,
+                      pct: 0,
+                      status: 'checking',
+                      date: date,
+                      file: file
+                    }));
+                    
+                    // Add all items to tray
+                    setTrayItems(prev => [...prev, ...uploadItems]);
+                    
+                    // Process each upload independently
+                    uploadItems.forEach(item => processUpload(item));
+                    
+                    // Reset form
                     setFile(null);
+                    setMultipleFiles([]);
                     setDate('');
                     setDateISO('');
                   }}
                   style={{
                     flex: 1,
                     padding: '12px',
-                    background: (!date || !file) ? '#E5E7EB' : '#3B82F6',
-                    color: (!date || !file) ? '#9CA3AF' : '#FFFFFF',
+                    background: (!date || (!file && multipleFiles.length === 0)) ? '#E5E7EB' : '#3B82F6',
+                    color: (!date || (!file && multipleFiles.length === 0)) ? '#9CA3AF' : '#FFFFFF',
                     border: 'none',
                     borderRadius: '8px',
                     fontSize: '14px',
                     fontWeight: 500,
-                    cursor: (!date || !file) ? 'not-allowed' : 'pointer',
+                    cursor: (!date || (!file && multipleFiles.length === 0)) ? 'not-allowed' : 'pointer',
                     outline: 'none',
                     WebkitTapHighlightColor: 'transparent',
                     userSelect: 'none',
@@ -2287,9 +2414,9 @@ export default function Dashboard() {
         items={trayItems}
         onClose={() => setTrayItems([])}
         onAllDone={(names) => {
-          setToast({ visible: true, message: names.length === 1 ? 'File uploaded successfully' : `${names.length} files uploaded successfully`, type: 'success' });
+          setToast({ visible: true, message: names.length === 1 ? `"${truncateFileName(names[0])}" uploaded successfully` : `${names.length} files uploaded successfully`, type: 'success' });
           setTimeout(() => setTrayItems([]), 1500);
-          setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+          setTimeout(() => setToast({ visible: false, message: '' }), 2000);
           // Close upload progress modal if it's open
           if (openUploadProgress) {
             setTimeout(() => setOpenUploadProgress(false), 1500);
@@ -2374,15 +2501,15 @@ export default function Dashboard() {
                       invalidate();
                       const all = await fetchDrive({ fresh: true });
                       setGroups(all);
-                      setToast({ visible: true, message: 'Folder deleted successfully', type: 'success' });
-                      setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                      setToast({ visible: true, message: `"${truncateFileName(group.date)}" folder deleted successfully`, type: 'success' });
+                      setTimeout(() => setToast({ visible: false, message: '' }), 2000);
                     } catch (e) {
                       console.error('Delete folder error:', e);
                       if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('Authentication failed')) {
                         setSessionExpired(true);
                       } else {
-                        setToast({ visible: true, message: 'Failed to delete folder', type: 'error' });
-                        setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                        setToast({ visible: true, message: `Failed to delete "${truncateFileName(group.date)}" folder`, type: 'error' });
+                        setTimeout(() => setToast({ visible: false, message: '' }), 2000);
                       }
                     } finally {
                       setLoading(false);
@@ -2397,15 +2524,15 @@ export default function Dashboard() {
                       invalidate();
                       const all = await fetchDrive({ fresh: true });
                       setGroups(all);
-                      setToast({ visible: true, message: 'File deleted successfully', type: 'success' });
-                      setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                      setToast({ visible: true, message: `"${truncateFileName(deleteConfirm.fileName)}" deleted successfully`, type: 'success' });
+                      setTimeout(() => setToast({ visible: false, message: '' }), 2000);
                     } catch (e) {
                       console.error('Delete error:', e);
                       if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('Authentication failed')) {
                         setSessionExpired(true);
                       } else {
-                        setToast({ visible: true, message: 'Failed to delete file', type: 'error' });
-                        setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+                        setToast({ visible: true, message: `Failed to delete "${truncateFileName(deleteConfirm.fileName)}"`, type: 'error' });
+                        setTimeout(() => setToast({ visible: false, message: '' }), 2000);
                       }
                     } finally {
                       setLoading(false);

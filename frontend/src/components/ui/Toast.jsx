@@ -40,7 +40,7 @@ export default function Toast({ message, visible, type = 'success' }) {
       style={{ 
         position: 'fixed',
         left: '50%',
-        bottom: '24px',
+        top: '24px',
         transform: 'translateX(-50%)',
         ...toastStyles,
         padding: '14px 20px',
@@ -56,7 +56,7 @@ export default function Toast({ message, visible, type = 'success' }) {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         textAlign: 'center',
-        animation: 'toastSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        animation: 'toastSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         userSelect: 'none',
         letterSpacing: '0.01em',
         textShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
@@ -64,9 +64,9 @@ export default function Toast({ message, visible, type = 'success' }) {
     >
       {message}
       <style>{`
-        @keyframes toastSlideUp {
+        @keyframes toastSlideDown {
           0% {
-            transform: translate(-50%, 100%);
+            transform: translate(-50%, -100%);
             opacity: 0;
           }
           100% {
@@ -75,13 +75,13 @@ export default function Toast({ message, visible, type = 'success' }) {
           }
         }
         
-        @keyframes toastSlideDown {
+        @keyframes toastSlideUp {
           0% {
             transform: translate(-50%, 0);
             opacity: 1;
           }
           100% {
-            transform: translate(-50%, 100%);
+            transform: translate(-50%, -100%);
             opacity: 0;
           }
         }
@@ -99,7 +99,8 @@ export default function Toast({ message, visible, type = 'success' }) {
             width: calc(100vw - 32px) !important;
             min-width: unset !important;
             max-width: unset !important;
-            bottom: 96px !important; /* Position above floating action buttons */
+            top: 16px !important; /* Position at top of screen */
+            bottom: auto !important;
             font-size: 15px !important;
             font-weight: 600 !important;
             padding: 18px 20px !important;
@@ -111,9 +112,9 @@ export default function Toast({ message, visible, type = 'success' }) {
           }
           
           /* Animation adjustments for mobile */
-          @keyframes toastSlideUp {
+          @keyframes toastSlideDown {
             0% {
-              transform: translateX(0) translateY(100%);
+              transform: translateX(0) translateY(-100%);
               opacity: 0;
             }
             100% {
@@ -129,7 +130,8 @@ export default function Toast({ message, visible, type = 'success' }) {
             left: 12px !important;
             right: 12px !important;
             width: calc(100vw - 24px) !important;
-            bottom: 88px !important;
+            top: 12px !important; /* Position at top of screen */
+            bottom: auto !important;
             font-size: 14px !important;
             font-weight: 600 !important;
             padding: 16px 18px !important;
@@ -141,29 +143,30 @@ export default function Toast({ message, visible, type = 'success' }) {
         /* Landscape phones */
         @media (max-width: 768px) and (orientation: landscape) {
           .toast-notification {
-            bottom: 24px !important;
+            top: 12px !important; /* Position at top of screen */
+            bottom: auto !important;
             font-size: 13px !important;
             padding: 12px 16px !important;
           }
         }
         
         /* Safe area support for phones with notches/home indicators */
-        @supports (bottom: env(safe-area-inset-bottom)) {
+        @supports (top: env(safe-area-inset-top)) {
           @media (max-width: 768px) {
             .toast-notification {
-              bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+              top: calc(16px + env(safe-area-inset-top)) !important;
             }
           }
           
           @media (max-width: 480px) {
             .toast-notification {
-              bottom: calc(88px + env(safe-area-inset-bottom)) !important;
+              top: calc(12px + env(safe-area-inset-top)) !important;
             }
           }
           
           @media (max-width: 768px) and (orientation: landscape) {
             .toast-notification {
-              bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+              top: calc(12px + env(safe-area-inset-top)) !important;
             }
           }
         }

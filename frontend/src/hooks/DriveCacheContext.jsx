@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { listAllGrouped } from '../lib/drive';
 
 const DriveCacheContext = createContext();
@@ -7,6 +7,29 @@ export function DriveCacheProvider({ children }) {
   const [groups, setGroups] = useState(null); // null = not loaded, [] = loaded but empty
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Initialize with cached data on mount for offline users
+  useEffect(() => {
+    const initializeCache = async () => {
+      if (!navigator.onLine) {
+        console.log('[DriveCacheContext] Offline on mount - checking for cached data');
+        // Try to load cached data from localStorage or IndexedDB
+        try {
+          const cached = localStorage.getItem('cachedGroups');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('[DriveCacheContext] Found cached data in localStorage');
+              setGroups(parsed);
+            }
+          }
+        } catch (e) {
+          console.log('[DriveCacheContext] No cached data found');
+        }
+      }
+    };
+    initializeCache();
+  }, []);
 
   // Fetch drive data, optionally force refresh
   const fetchDrive = useCallback(async (opts = {}) => {
@@ -21,6 +44,10 @@ export function DriveCacheProvider({ children }) {
       try {
         const data = await listAllGrouped({ fresh: true });
         setGroups(data);
+        // Save to localStorage for offline access
+        if (Array.isArray(data) && data.length > 0) {
+          localStorage.setItem('cachedGroups', JSON.stringify(data));
+        }
         return data;
       } catch (e) {
         console.error('[DriveCacheContext] Failed to fetch:', e.message);
@@ -48,6 +75,10 @@ export function DriveCacheProvider({ children }) {
     try {
       const data = await listAllGrouped({ fresh });
       setGroups(data);
+      // Save to localStorage for offline access
+      if (Array.isArray(data) && data.length > 0) {
+        localStorage.setItem('cachedGroups', JSON.stringify(data));
+      }
       return data;
     } catch (e) {
       setError(e);
