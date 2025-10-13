@@ -139,6 +139,7 @@ export default function Dashboard() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineFiles, setOfflineFiles] = useState(new Set());
   const [downloadingFiles, setDownloadingFiles] = useState(new Set());
+  const [processingFiles, setProcessingFiles] = useState(new Set());
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   
   // Utility function to truncate file names for notifications
@@ -420,56 +421,157 @@ export default function Dashboard() {
   }
 
   const handleMakeOffline = async (fileId, fileName) => {
+    console.log('🔄 Making file offline:', fileId, fileName);
     setOpenMenuFileId(null);
     
-    // Add to downloading set
+    // Check if already processing
+    if (processingFiles.has(fileId)) {
+      console.log('⚠️ File is already being processed, ignoring click');
+      return;
+    }
+    
+    // Add to processing and downloading sets
+    setProcessingFiles(prev => new Set([...prev, fileId]));
     setDownloadingFiles(prev => new Set([...prev, fileId]));
     
     try {
+      console.log('📥 Downloading file bytes from server...');
       const { bytes, fileName: responseName } = await getFileBytes(fileId);
+      
+      if (!bytes || bytes.byteLength === 0) {
+        throw new Error('No file content received from server');
+      }
+      
+      console.log('💾 Storing file in offline cache...');
       await cacheSetPdf(fileId, bytes, responseName || fileName);
       
-      // Remove from downloading and add to offline
+      // Remove from downloading and processing, add to offline
       setDownloadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
+      setProcessingFiles(prev => {
         const newSet = new Set(prev);
         newSet.delete(fileId);
         return newSet;
       });
       setOfflineFiles(prev => new Set([...prev, fileId]));
+      
+      console.log('✅ File successfully made available offline:', fileName);
       setToast({ visible: true, message: `"${truncateFileName(fileName)}" made offline`, type: 'success' });
       setTimeout(() => setToast({ visible: false, message: '' }), 2000);
     } catch (e) {
-      // Remove from downloading on error
+      console.error('❌ Failed to make file offline:', e);
+      
+      // Remove from processing and downloading on error
       setDownloadingFiles(prev => {
         const newSet = new Set(prev);
         newSet.delete(fileId);
         return newSet;
       });
-      setToast({ visible: true, message: 'Failed to save file for offline use', type: 'error' });
-      setTimeout(() => setToast({ visible: false, message: '' }), 2000);
+      setProcessingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
+      
+      const errorMessage = e.message.includes('AUTHENTICATION_EXPIRED') 
+        ? 'Authentication expired. Please log in again.'
+        : e.message.includes('Failed to fetch') || e.message.includes('network')
+        ? 'Network error. Please check your connection and try again.'
+        : 'Failed to save file for offline use';
+        
+      setToast({ visible: true, message: errorMessage, type: 'error' });
+      setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+      
+      // Handle authentication errors
+      if (e.message.includes('AUTHENTICATION_EXPIRED')) {
+        setSessionExpired(true);
+      }
     }
   };
 
   const handleRemoveOffline = async (fileId, fileName) => {
+    console.log('🔄 Removing file from offline:', fileId, fileName);
     setOpenMenuFileId(null);
+    
+    // Check if already processing
+    if (processingFiles.has(fileId)) {
+      console.log('⚠️ File is already being processed, ignoring click');
+      return;
+    }
+    
+    // Add to processing set
+    setProcessingFiles(prev => new Set([...prev, fileId]));
+    
     try {
-      const db = await window.indexedDB.open('newspapers-db', 2);
-      db.onsuccess = () => {
-        const tx = db.result.transaction('pdfs', 'readwrite');
-        tx.objectStore('pdfs').delete(fileId);
-        tx.oncomplete = () => {
-          setOfflineFiles(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(fileId);
-            return newSet;
-          });
-          setToast({ visible: true, message: `"${truncateFileName(fileName)}" removed from offline storage`, type: 'success' });
-          setTimeout(() => setToast({ visible: false, message: '' }), 2000);
+      console.log('📄 Opening IndexedDB to remove file...');
+      const result = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('newspapers-db', 2);
+        
+        request.onerror = () => {
+          reject(new Error('Failed to open database'));
         };
-      };
-    } catch (e) {
-      setToast({ visible: true, message: 'Failed to remove offline file', type: 'error' });
+        
+        request.onsuccess = () => {
+          const db = request.result;
+          try {
+            const transaction = db.transaction(['pdfs'], 'readwrite');
+            const store = transaction.objectStore('pdfs');
+            const deleteRequest = store.delete(fileId);
+            
+            deleteRequest.onsuccess = () => {
+              console.log('✅ File removed from IndexedDB');
+              resolve({ success: true });
+            };
+            
+            deleteRequest.onerror = () => {
+              reject(new Error('Failed to delete file from offline storage'));
+            };
+            
+            transaction.onerror = () => {
+              reject(new Error('Transaction failed'));
+            };
+          } catch (error) {
+            reject(error);
+          } finally {
+            db.close();
+          }
+        };
+      });
+      
+      // Remove from processing and offline sets
+      setProcessingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
+      setOfflineFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
+      
+      console.log('✅ File successfully removed from offline storage:', fileName);
+      setToast({ visible: true, message: `"${truncateFileName(fileName)}" removed from offline storage`, type: 'success' });
       setTimeout(() => setToast({ visible: false, message: '' }), 2000);
+    } catch (e) {
+      console.error('❌ Failed to remove offline file:', e);
+      
+      // Remove from processing on error
+      setProcessingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
+      
+      const errorMessage = e.message === 'Failed to open database'
+        ? 'Unable to access offline storage. Please try refreshing the page.'
+        : 'Failed to remove offline file';
+        
+      setToast({ visible: true, message: errorMessage, type: 'error' });
+      setTimeout(() => setToast({ visible: false, message: '' }), 3000);
     }
   };
 
@@ -1247,12 +1349,15 @@ export default function Dashboard() {
                           <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 9998 }} ref={openMenuFileId === file.fileId ? menuRef : null}>
                             <button
                               onClick={(e) => {
+                                e.preventDefault();
                                 e.stopPropagation();
+                                console.log('🎯 Three-dot menu clicked for file:', file.fileId, file.fileName);
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 setMenuPosition({
                                   top: rect.bottom + 4,
                                   left: rect.left - 140,
                                 });
+                                console.log('📍 Menu position set:', { top: rect.bottom + 4, left: rect.left - 140 });
                                 setOpenMenuFileId(openMenuFileId === file.fileId ? null : file.fileId);
                               }}
                               style={{
@@ -1304,21 +1409,26 @@ export default function Dashboard() {
                               }}>
                                 <button
                                   onClick={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
-                                    if (isOnline && !offlineFiles.has(file.fileId)) {
+                                    console.log('🔄 Make offline clicked:', file.fileId, file.fileName);
+                                    if (isOnline && !offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) {
                                       handleMakeOffline(file.fileId, file.fileName || file.name);
+                                    } else {
+                                      console.log('⚠️ Make offline blocked - isOnline:', isOnline, 'alreadyOffline:', offlineFiles.has(file.fileId), 'processing:', processingFiles.has(file.fileId));
                                     }
                                   }}
-                                  disabled={!isOnline || offlineFiles.has(file.fileId)}
+                                  disabled={!isOnline || offlineFiles.has(file.fileId) || processingFiles.has(file.fileId)}
                                   style={{
                                     width: '100%',
                                     padding: '10px 14px',
                                     border: 'none',
                                     background: 'transparent',
                                     textAlign: 'left',
-                                    cursor: (isOnline && !offlineFiles.has(file.fileId)) ? 'pointer' : 'not-allowed',
+                                    cursor: (isOnline && !offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) ? 'pointer' : 'not-allowed',
                                     fontSize: '13px',
-                                    color: (isOnline && !offlineFiles.has(file.fileId)) ? '#2563EB' : '#bbb',
+                                    color: (isOnline && !offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) ? '#2563EB' : '#bbb',
+                                    opacity: processingFiles.has(file.fileId) ? 0.6 : 1,
                                     fontWeight: 500,
                                     display: 'flex',
                                     alignItems: 'center',
@@ -1328,7 +1438,7 @@ export default function Dashboard() {
                                     userSelect: 'none',
                                   }}
                                   onMouseEnter={(e) => {
-                                    if (isOnline && !offlineFiles.has(file.fileId)) {
+                                    if (isOnline && !offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) {
                                       e.currentTarget.style.background = '#EFF6FF';
                                     }
                                   }}
@@ -1337,25 +1447,30 @@ export default function Dashboard() {
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M12 5v14m7-7H5"/>
                                   </svg>
-                                  Make available offline
+                                  {processingFiles.has(file.fileId) ? 'Processing...' : 'Make available offline'}
                                 </button>
                                 <button
                                   onClick={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
-                                    if (offlineFiles.has(file.fileId)) {
+                                    console.log('🗿 Remove offline clicked:', file.fileId, file.fileName);
+                                    if (offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) {
                                       handleRemoveOffline(file.fileId, file.fileName || file.name);
+                                    } else {
+                                      console.log('⚠️ Remove offline blocked - isOffline:', offlineFiles.has(file.fileId), 'processing:', processingFiles.has(file.fileId));
                                     }
                                   }}
-                                  disabled={!offlineFiles.has(file.fileId)}
+                                  disabled={!offlineFiles.has(file.fileId) || processingFiles.has(file.fileId)}
                                   style={{
                                     width: '100%',
                                     padding: '10px 14px',
                                     border: 'none',
                                     background: 'transparent',
                                     textAlign: 'left',
-                                    cursor: offlineFiles.has(file.fileId) ? 'pointer' : 'not-allowed',
+                                    cursor: (offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) ? 'pointer' : 'not-allowed',
                                     fontSize: '13px',
-                                    color: offlineFiles.has(file.fileId) ? '#EF4444' : '#bbb',
+                                    color: (offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) ? '#EF4444' : '#bbb',
+                                    opacity: processingFiles.has(file.fileId) ? 0.6 : 1,
                                     fontWeight: 500,
                                     display: 'flex',
                                     alignItems: 'center',
@@ -1365,7 +1480,7 @@ export default function Dashboard() {
                                     userSelect: 'none',
                                   }}
                                   onMouseEnter={(e) => {
-                                    if (offlineFiles.has(file.fileId)) {
+                                    if (offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) {
                                       e.currentTarget.style.background = '#FEF2F2';
                                     }
                                   }}
@@ -1374,11 +1489,13 @@ export default function Dashboard() {
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M18 6L6 18M6 6l12 12"/>
                                   </svg>
-                                  Remove from offline
+                                  {processingFiles.has(file.fileId) ? 'Processing...' : 'Remove from offline'}
                                 </button>
                                 <button
                                   onClick={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
+                                    console.log('🗿 Delete clicked:', file.fileId, file.fileName);
                                     setOpenMenuFileId(null);
                                     setDeleteConfirm({ fileId: file.fileId, fileName: file.fileName || file.name || 'Untitled', date: group.date });
                                   }}
