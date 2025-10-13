@@ -1,25 +1,32 @@
 
 
 import { useState, useRef, useEffect } from 'react';
-import { cacheSetPdf, cacheGetPdf } from '../../lib/idb';
+import { cacheGetPdf } from '../../lib/idb';
 import useOutsideClick from '../../hooks/useOutsideClick';
-import { getFileBytes } from '../../lib/drive';
+import { offlineManager, getErrorMessage } from '../../lib/offlineUtils';
 
 export default function FileRow({ file, onOpen, onDelete }) {
+  // Ensure file has required properties
+  const fileId = file.fileId || file.id;
+  const fileName = file.fileName || file.name || 'document.pdf';
   const [menuOpen, setMenuOpen] = useState(false);
   const [offlineAvailable, setOfflineAvailable] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isProcessing, setIsProcessing] = useState(false);
   const menuRef = useRef();
 
   useOutsideClick(menuRef, () => setMenuOpen(false));
 
   useEffect(() => {
     let mounted = true;
-    cacheGetPdf(file.id).then(res => {
+    cacheGetPdf(fileId).then(res => {
       if (mounted) setOfflineAvailable(!!res);
+    }).catch(error => {
+      console.error('Error checking offline status:', error);
+      if (mounted) setOfflineAvailable(false);
     });
     return () => { mounted = false; };
-  }, [file.id]);
+  }, [fileId]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -32,29 +39,80 @@ export default function FileRow({ file, onOpen, onDelete }) {
     };
   }, []);
 
-  const handleMakeOffline = async () => {
+  const handleMakeOffline = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isProcessing) {
+      console.log('Operation already in progress, ignoring click');
+      return;
+    }
+    
     setMenuOpen(false);
+    setIsProcessing(true);
+    
     try {
-      const { bytes, fileName } = await getFileBytes(file.id);
-      await cacheSetPdf(file.id, bytes, fileName || file.fileName);
-      setOfflineAvailable(true);
-    } catch (e) {
-      alert('Failed to save file for offline use.');
+      console.log('🔄 Starting offline operation for file:', fileId, fileName);
+      const result = await offlineManager.makeFileOffline({ id: fileId, fileName });
+      
+      if (result.success) {
+        setOfflineAvailable(true);
+        if (!result.alreadyOffline) {
+          console.log('✅ File saved for offline use:', fileName);
+        } else {
+          console.log('ℹ️ File was already available offline:', fileName);
+        }
+      } else {
+        const errorMsg = getErrorMessage(result, 'Saving file offline');
+        console.error('❌ Failed to make file offline:', errorMsg);
+        alert(errorMsg);
+      }
+    } catch (error) {
+      console.error('❌ Unexpected error in handleMakeOffline:', error);
+      alert('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleRemoveOffline = async () => {
-    setMenuOpen(false);
-    try {
-      const db = await window.indexedDB.open('newspapers-db', 2);
-      db.onsuccess = () => {
-        const tx = db.result.transaction('pdfs', 'readwrite');
-        tx.objectStore('pdfs').delete(file.id);
-        tx.oncomplete = () => setOfflineAvailable(false);
-      };
-    } catch (e) {
-      alert('Failed to remove offline file.');
+  const handleRemoveOffline = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isProcessing) {
+      console.log('Operation already in progress, ignoring click');
+      return;
     }
+    
+    setMenuOpen(false);
+    setIsProcessing(true);
+    
+    try {
+      console.log('🔄 Removing file from offline storage:', fileId, fileName);
+      const result = await offlineManager.removeFileFromOffline(fileId);
+      
+      if (result.success) {
+        setOfflineAvailable(false);
+        console.log('✅ File removed from offline storage:', fileName);
+      } else {
+        const errorMsg = getErrorMessage(result, 'Removing file from offline storage');
+        console.error('❌ Failed to remove offline file:', errorMsg);
+        alert(errorMsg);
+      }
+    } catch (error) {
+      console.error('❌ Unexpected error in handleRemoveOffline:', error);
+      alert('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDelete = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+    console.log('Deleting file:', fileId);
+    onDelete(file);
   };
 
   return (
@@ -118,7 +176,11 @@ export default function FileRow({ file, onOpen, onDelete }) {
             padding: 0,
             zIndex: 2,
           }}
-          onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
+          onClick={e => { 
+            e.stopPropagation(); 
+            console.log('Menu button clicked, current state:', menuOpen);
+            setMenuOpen(v => !v); 
+          }}
           aria-label="File options"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
@@ -140,44 +202,52 @@ export default function FileRow({ file, onOpen, onDelete }) {
             gap: 2,
           }}>
             <button
+              type="button"
               style={{
                 ...menuBtnStyle,
-                color: isOnline ? '#222' : '#bbb',
-                cursor: isOnline ? 'pointer' : 'not-allowed',
+                color: (isOnline && !isProcessing) ? '#222' : '#bbb',
+                cursor: (isOnline && !isProcessing) ? 'pointer' : 'not-allowed',
+                opacity: (isOnline && !isProcessing) ? 1 : 0.5,
               }}
-              onClick={isOnline ? handleMakeOffline : undefined}
-              disabled={!isOnline}
+              onClick={(isOnline && !isProcessing) ? handleMakeOffline : (e) => { e.preventDefault(); e.stopPropagation(); }}
+              disabled={!isOnline || isProcessing}
+              aria-label="Make file available offline"
             >
-              <svg width="16" height="16" fill="none" stroke="#2563eb" strokeWidth="2" viewBox="0 0 24 24" style={{marginRight:8}}><path d="M12 5v14m7-7H5"/></svg>
+              <svg width="16" height="16" fill="none" stroke="#2563eb" strokeWidth="2" viewBox="0 0 24 24" style={{marginRight:8}} aria-hidden="true"><path d="M12 5v14m7-7H5"/></svg>
               Make available offline
             </button>
             <button
+              type="button"
               style={{
                 ...menuBtnStyle,
-                color: offlineAvailable ? '#222' : '#bbb',
-                cursor: offlineAvailable ? 'pointer' : 'not-allowed',
+                color: (offlineAvailable && !isProcessing) ? '#222' : '#bbb',
+                cursor: (offlineAvailable && !isProcessing) ? 'pointer' : 'not-allowed',
+                opacity: (offlineAvailable && !isProcessing) ? 1 : 0.5,
               }}
-              onClick={offlineAvailable ? handleRemoveOffline : undefined}
-              disabled={!offlineAvailable}
+              onClick={(offlineAvailable && !isProcessing) ? handleRemoveOffline : (e) => { e.preventDefault(); e.stopPropagation(); }}
+              disabled={!offlineAvailable || isProcessing}
+              aria-label="Remove file from offline storage"
             >
-              <svg width="16" height="16" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24" style={{marginRight:8}}><path d="M18 6L6 18M6 6l12 12"/></svg>
+              <svg width="16" height="16" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24" style={{marginRight:8}} aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
               Remove from offline
             </button>
             <button
+              type="button"
               style={{
                 ...menuBtnStyle,
                 color: '#ef4444',
                 cursor: 'pointer',
               }}
-              onClick={() => { setMenuOpen(false); onDelete(file); }}
+              onClick={handleDelete}
+              aria-label="Delete file"
             >
-              <svg width="16" height="16" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24" style={{marginRight:8}}><path d="M3 6h18M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/></svg>
+              <svg width="16" height="16" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24" style={{marginRight:8}} aria-hidden="true"><path d="M3 6h18M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/></svg>
               Delete
             </button>
           </div>
         )}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#222' }}>{file.fileName}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#222' }}>{fileName}</div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button style={{
           background: '#d90429',

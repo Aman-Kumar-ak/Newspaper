@@ -9,6 +9,7 @@ const rootDir = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production';
+  const apiBaseUrl = process.env.VITE_API_BASE_URL || 'http://localhost:8080';
   
   return {
     plugins: [
@@ -80,17 +81,19 @@ export default defineConfig(({ mode }) => {
       strictPort: false,
       // Remove CSP in development to avoid issues with PDF.js worker
       headers: isProduction ? {
-        // Only apply CSP in production
+        // Only apply CSP in production - more permissive for proper functionality
         'Content-Security-Policy': [
-          "default-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://cloud-newspaper-api.onrender.com;",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://documentservices.adobe.com https://dc-api.adobe.io https://cdn.jsdelivr.net;",
-          "connect-src 'self' https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://cloud-newspaper-api.onrender.com https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://cdn.jsdelivr.net;",
-          "img-src 'self' data: blob: https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;",
-          "style-src 'self' 'unsafe-inline' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
-          "font-src 'self' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
-          "frame-src 'self' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;",
-          "worker-src 'self' blob: https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com https://cdn.jsdelivr.net;"
-        ].join('; ')
+          `default-src 'self' ${apiBaseUrl} https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;`,
+          `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://documentservices.adobe.com https://dc-api.adobe.io https://cdn.jsdelivr.net blob:;`,
+          `connect-src 'self' ${apiBaseUrl} https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://cdn.jsdelivr.net wss: ws:;`,
+          `img-src 'self' data: blob: https://documentservices.adobe.com https://dc-api.adobe.io https://*.adobe.io https://*.adobe.com;`,
+          `style-src 'self' 'unsafe-inline' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;`,
+          `font-src 'self' data: https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;`,
+          `frame-src 'self' https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com;`,
+          `worker-src 'self' blob: data: https://documentservices.adobe.com https://*.adobe.io https://*.adobe.com https://cdn.jsdelivr.net;`,
+          `object-src 'none';`,
+          `base-uri 'self';`
+        ].join(' ')
       } : {}
     },
     
