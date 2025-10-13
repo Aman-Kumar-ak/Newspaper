@@ -1346,7 +1346,7 @@ export default function Dashboard() {
                           }}
                         >
                           {/* Three-dot menu */}
-                          <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 9998 }} ref={openMenuFileId === file.fileId ? menuRef : null}>
+                          <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 9998 }}>
                             <button
                               onClick={(e) => {
                                 e.preventDefault();
@@ -1392,9 +1392,15 @@ export default function Dashboard() {
                               </svg>
                             </button>
                             
-                            {openMenuFileId === file.fileId && createPortal(
-                              <div 
+                            {openMenuFileId === file.fileId && (() => {
+                              console.log('🎨 Rendering portal menu for:', file.fileId, 'Position:', menuPosition, 'isOnline:', isOnline);
+                              return createPortal(
+                              <div
                                 ref={menuRef}
+                                onClick={(e) => {
+                                  console.log('📋 Menu container clicked');
+                                  e.stopPropagation();
+                                }}
                                 style={{
                                 position: 'fixed',
                                 top: `${menuPosition.top}px`,
@@ -1407,18 +1413,46 @@ export default function Dashboard() {
                                 zIndex: 99999,
                                 overflow: 'hidden',
                               }}>
+                                {/* Test button for debugging */}
                                 <button
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
+                                    console.log('🧪 TEST BUTTON CLICKED - Portal is working!');
+                                    alert('Test button clicked - Portal is working!');
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 14px',
+                                    border: 'none',
+                                    background: '#f0f9ff',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    color: '#0369a1',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  🧪 TEST (Portal Working)
+                                </button>
+                                <button
+                                  onMouseDown={() => console.log('🔄 Make offline mousedown')}
+                                  onMouseUp={() => console.log('🔄 Make offline mouseup')}
+                                  onClick={(e) => {
+                                    console.log('🔄 Make offline onClick triggered - start');
+                                    e.preventDefault();
+                                    e.stopPropagation();
                                     console.log('🔄 Make offline clicked:', file.fileId, file.fileName);
+                                    console.log('📊 Current states - isOnline:', isOnline, 'offlineFiles:', offlineFiles.has(file.fileId), 'processing:', processingFiles.has(file.fileId));
                                     if (isOnline && !offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) {
+                                      console.log('🚀 Calling handleMakeOffline...');
                                       handleMakeOffline(file.fileId, file.fileName || file.name);
                                     } else {
                                       console.log('⚠️ Make offline blocked - isOnline:', isOnline, 'alreadyOffline:', offlineFiles.has(file.fileId), 'processing:', processingFiles.has(file.fileId));
                                     }
+                                    console.log('🔄 Make offline onClick triggered - end');
                                   }}
-                                  disabled={!isOnline || offlineFiles.has(file.fileId) || processingFiles.has(file.fileId)}
+                                  // disabled={!isOnline || offlineFiles.has(file.fileId) || processingFiles.has(file.fileId)} // Temporarily disabled for testing
                                   style={{
                                     width: '100%',
                                     padding: '10px 14px',
@@ -1526,7 +1560,7 @@ export default function Dashboard() {
                                 </button>
                               </div>,
                               document.body
-                            )}
+                            )})()}
                           </div>
 
                           {/* PDF Thumbnail Preview */}
