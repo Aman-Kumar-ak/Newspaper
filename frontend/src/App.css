@@ -30,7 +30,7 @@
   scrollbar-width: thin;
   scrollbar-color: #CBD5E1 #F3F4F6;
 }
-
+ 
 /* Expose a CSS variable to shift the profile icon horizontally to the right. */
 :root {
   --profile-right-shift: 81px; /* Increase this (e.g., 40px, 80px) to move the profile button right */
