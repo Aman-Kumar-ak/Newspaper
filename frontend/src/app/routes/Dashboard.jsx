@@ -421,12 +421,10 @@ export default function Dashboard() {
   }
 
   const handleMakeOffline = async (fileId, fileName) => {
-    console.log('🔄 Making file offline:', fileId, fileName);
     setOpenMenuFileId(null);
     
     // Check if already processing
     if (processingFiles.has(fileId)) {
-      console.log('⚠️ File is already being processed, ignoring click');
       return;
     }
     
@@ -435,14 +433,12 @@ export default function Dashboard() {
     setDownloadingFiles(prev => new Set([...prev, fileId]));
     
     try {
-      console.log('📥 Downloading file bytes from server...');
       const { bytes, fileName: responseName } = await getFileBytes(fileId);
       
       if (!bytes || bytes.byteLength === 0) {
         throw new Error('No file content received from server');
       }
       
-      console.log('💾 Storing file in offline cache...');
       await cacheSetPdf(fileId, bytes, responseName || fileName);
       
       // Remove from downloading and processing, add to offline
@@ -458,11 +454,10 @@ export default function Dashboard() {
       });
       setOfflineFiles(prev => new Set([...prev, fileId]));
       
-      console.log('✅ File successfully made available offline:', fileName);
       setToast({ visible: true, message: `"${truncateFileName(fileName)}" made offline`, type: 'success' });
       setTimeout(() => setToast({ visible: false, message: '' }), 2000);
     } catch (e) {
-      console.error('❌ Failed to make file offline:', e);
+      console.error('Failed to make file offline:', e);
       
       // Remove from processing and downloading on error
       setDownloadingFiles(prev => {
@@ -493,12 +488,10 @@ export default function Dashboard() {
   };
 
   const handleRemoveOffline = async (fileId, fileName) => {
-    console.log('🔄 Removing file from offline:', fileId, fileName);
     setOpenMenuFileId(null);
     
     // Check if already processing
     if (processingFiles.has(fileId)) {
-      console.log('⚠️ File is already being processed, ignoring click');
       return;
     }
     
@@ -506,7 +499,6 @@ export default function Dashboard() {
     setProcessingFiles(prev => new Set([...prev, fileId]));
     
     try {
-      console.log('📄 Opening IndexedDB to remove file...');
       const result = await new Promise((resolve, reject) => {
         const request = indexedDB.open('newspapers-db', 2);
         
@@ -522,7 +514,6 @@ export default function Dashboard() {
             const deleteRequest = store.delete(fileId);
             
             deleteRequest.onsuccess = () => {
-              console.log('✅ File removed from IndexedDB');
               resolve({ success: true });
             };
             
@@ -553,11 +544,10 @@ export default function Dashboard() {
         return newSet;
       });
       
-      console.log('✅ File successfully removed from offline storage:', fileName);
       setToast({ visible: true, message: `"${truncateFileName(fileName)}" removed from offline storage`, type: 'success' });
       setTimeout(() => setToast({ visible: false, message: '' }), 2000);
     } catch (e) {
-      console.error('❌ Failed to remove offline file:', e);
+      console.error('Failed to remove offline file:', e);
       
       // Remove from processing on error
       setProcessingFiles(prev => {
@@ -1351,13 +1341,11 @@ export default function Dashboard() {
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                console.log('🎯 Three-dot menu clicked for file:', file.fileId, file.fileName);
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 setMenuPosition({
                                   top: rect.bottom + 4,
                                   left: rect.left - 140,
                                 });
-                                console.log('📍 Menu position set:', { top: rect.bottom + 4, left: rect.left - 140 });
                                 setOpenMenuFileId(openMenuFileId === file.fileId ? null : file.fileId);
                               }}
                               style={{
@@ -1392,13 +1380,10 @@ export default function Dashboard() {
                               </svg>
                             </button>
                             
-                            {openMenuFileId === file.fileId && (() => {
-                              console.log('🎨 Rendering portal menu for:', file.fileId, 'Position:', menuPosition, 'isOnline:', isOnline);
-                              return createPortal(
+                            {openMenuFileId === file.fileId && createPortal(
                               <div
                                 ref={menuRef}
                                 onClick={(e) => {
-                                  console.log('📋 Menu container clicked');
                                   e.stopPropagation();
                                 }}
                                 style={{
@@ -1413,46 +1398,15 @@ export default function Dashboard() {
                                 zIndex: 99999,
                                 overflow: 'hidden',
                               }}>
-                                {/* Test button for debugging */}
                                 <button
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    console.log('🧪 TEST BUTTON CLICKED - Portal is working!');
-                                    alert('Test button clicked - Portal is working!');
-                                  }}
-                                  style={{
-                                    width: '100%',
-                                    padding: '8px 14px',
-                                    border: 'none',
-                                    background: '#f0f9ff',
-                                    textAlign: 'left',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    color: '#0369a1',
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  🧪 TEST (Portal Working)
-                                </button>
-                                <button
-                                  onMouseDown={() => console.log('🔄 Make offline mousedown')}
-                                  onMouseUp={() => console.log('🔄 Make offline mouseup')}
-                                  onClick={(e) => {
-                                    console.log('🔄 Make offline onClick triggered - start');
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    console.log('🔄 Make offline clicked:', file.fileId, file.fileName);
-                                    console.log('📊 Current states - isOnline:', isOnline, 'offlineFiles:', offlineFiles.has(file.fileId), 'processing:', processingFiles.has(file.fileId));
                                     if (isOnline && !offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) {
-                                      console.log('🚀 Calling handleMakeOffline...');
                                       handleMakeOffline(file.fileId, file.fileName || file.name);
-                                    } else {
-                                      console.log('⚠️ Make offline blocked - isOnline:', isOnline, 'alreadyOffline:', offlineFiles.has(file.fileId), 'processing:', processingFiles.has(file.fileId));
                                     }
-                                    console.log('🔄 Make offline onClick triggered - end');
                                   }}
-                                  // disabled={!isOnline || offlineFiles.has(file.fileId) || processingFiles.has(file.fileId)} // Temporarily disabled for testing
+                                  disabled={!isOnline || offlineFiles.has(file.fileId) || processingFiles.has(file.fileId)}
                                   style={{
                                     width: '100%',
                                     padding: '10px 14px',
@@ -1487,11 +1441,8 @@ export default function Dashboard() {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    console.log('🗿 Remove offline clicked:', file.fileId, file.fileName);
                                     if (offlineFiles.has(file.fileId) && !processingFiles.has(file.fileId)) {
                                       handleRemoveOffline(file.fileId, file.fileName || file.name);
-                                    } else {
-                                      console.log('⚠️ Remove offline blocked - isOffline:', offlineFiles.has(file.fileId), 'processing:', processingFiles.has(file.fileId));
                                     }
                                   }}
                                   disabled={!offlineFiles.has(file.fileId) || processingFiles.has(file.fileId)}
@@ -1529,7 +1480,6 @@ export default function Dashboard() {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    console.log('🗿 Delete clicked:', file.fileId, file.fileName);
                                     setOpenMenuFileId(null);
                                     setDeleteConfirm({ fileId: file.fileId, fileName: file.fileName || file.name || 'Untitled', date: group.date });
                                   }}
@@ -1560,7 +1510,7 @@ export default function Dashboard() {
                                 </button>
                               </div>,
                               document.body
-                            )})()}
+                            )}
                           </div>
 
                           {/* PDF Thumbnail Preview */}
